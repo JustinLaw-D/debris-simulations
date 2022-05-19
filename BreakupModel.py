@@ -4,14 +4,87 @@ from scipy.stats import rv_continuous, norm
 import random
 import numpy as np
 
+def calc_M(m_s, m_d, v):
+    '''
+    calculates the M factor used for L distribution calculation, and
+    determines if a collision is catestrophic or not
+    
+    Parameter(s):
+    m_s : satellite mass (kg)
+    m_d : mass of the debris (kg)
+    v : collision velocity (m/s)
+
+    Keyword parameter(s): None
+
+    Output(s):
+    M : value of M parameter (variable units)
+    cat : whether or not the collision was catestrophic (boolean)
+    '''
+
+    E_p = (0.5*m_d*(v**2)/m_s)/1000 # E_p in J/g
+
+    if E_p >= 40 : return m_s + m_d, True # catestrophic collision
+    else : return m_d*(v/1000), False # non-catestrophic collision
+
+def calc_Ntot_coll(M, Lmin):
+    '''
+    calculates the total number of debris produced with characteristic length
+    greater than Lmin, for a collision
+
+    Parameter(s):
+    M : fit parameter given by calc_M (variable units)
+    Lmin : minimu characteristic length (m)
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    N : total number of fragments of size > Lmin
+
+    Notes:
+    Model output is a continuous value, and is simply truncated
+    '''
+
+    return int(0.1*(M**0.75)*(Lmin**(-1.71)))
+
+def find_A(L):
+    '''
+    calculates the average cross-sectional area of an object with a given characteristic length
+
+    Parameter(s):
+    L : characteristic length (m)
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    A : average cross-sectional area (m^2)
+    '''
+
+    if L < 0.00167 : return 0.540424*(L**2)
+    else : return 0.556945*(L**2.0047077)
+
 class Lcol_dist(rv_continuous):
-    '''Probability distribution of characteristic length for spacecraft collision with debris, 
-    all inputs are in standard SI units'''
+    '''
+    Probability distribution of characteristic length for spacecraft collision with debris, 
+    all inputs are in standard SI units
+    '''
 
     def __init__(self, momtype=1, a=1/1000, b=None, xtol=1e-14, badvalue=None, name=None, longname=None, shapes=None, extradoc=None, seed=None):
         super().__init__(momtype, a, b, xtol, badvalue, name, longname, shapes, extradoc, seed)
 
     def cdf(self, L, M):
+        '''
+        cummulative distribution function for the charactersitic length of debris from a collision
+
+        Parameter(s):
+        L : characteristic length (m)
+        M : fit parameter given by calc_M (variable units)
+
+        Keyword Parameter(s): None
+
+        Output(s):
+        CDF : value of CDF at L
+        '''
+
         if M <= 0 or L < self.a: return 0
         else: return self._cdf(L, M)
     
@@ -20,7 +93,7 @@ class Lcol_dist(rv_continuous):
         return (1- 0.1*(M**0.75)*(L**(-1.71)))/max_val
 
 class AMcoll_dist(rv_continuous):
-    '''probability distribution for the A/M of fragments, given a characteristic length.
+    '''probability distribution for the A/M of fragments from a collision, given a characteristic length.
     all inputs in log_10 of standard SI units.'''
 
     def _pdf11(self, chi, lambda_c):
@@ -75,11 +148,43 @@ class AMcoll_dist(rv_continuous):
             if random.uniform(0,1) > comp : return self._pdf11(chi, lambda_c)
             else : return self._pdf8(chi, lambda_c)
 
+    def pdf(self, chi, lambda_c):
+        '''
+        probability distribution function for the log of the A/M ratio of debris
+
+        Parameter(s):
+        chi : log10 of A/M (log10(m^2/kg))
+        lambda_c : log10 of the characteristic length (log10(m))
+
+        Keyword Parameter(s): None
+
+        Output(s):
+        PDF : value of the pdf at chi, given lambda_c
+        '''
+
+        return self._pdf(chi, lambda_c)
+
 class dvcoll_dist(rv_continuous):
-    '''generates a random change is velocity for debris, based on the A/M
+    '''generates a random change in velocity for debris from a collision, based on the A/M
     ratio'''
 
     def _pdf(self, v, chi):
         mu = 0.9*chi + 2.9
         sigma = 0.4
         return norm.pdf(v, mu, sigma)
+
+    def pdf(self, v, chi):
+        '''
+        probability distribution function for the log of the ejection velocity of debris
+
+        Parameter(s):
+        v : log10 of the ejection velocity (log10(m/s))
+        chi : log10 of A/M (log10(m^2/kg))
+
+        Keyword Parameter(s): None
+
+        Output(s):
+        PDF : value of the pdf at v, given chi
+        '''
+
+        return self._pdf(v, chi)
