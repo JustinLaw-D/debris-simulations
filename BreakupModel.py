@@ -1,7 +1,9 @@
 # implementation of the NASA standard breakup model
+# TODO: FIX NORMALIZATION IN EVERYTHING
 
-from scipy.stats import rv_continuous, norm
-import random
+from imp import load_module
+from scipy.stats import norm
+from scipy.special import erf, erfinv
 import numpy as np
 
 def calc_M(m_s, m_d, v):
@@ -33,7 +35,7 @@ def calc_Ntot_coll(M, Lmin):
 
     Parameter(s):
     M : fit parameter given by calc_M (variable units)
-    Lmin : minimu characteristic length (m)
+    Lmin : minimum characteristic length (m)
 
     Keyword Parameter(s): None
 
@@ -62,35 +64,87 @@ def find_A(L):
     if L < 0.00167 : return 0.540424*(L**2)
     else : return 0.556945*(L**2.0047077)
 
-class Lcol_dist(rv_continuous):
+def randL_coll(num, M, L_min, L_max):
     '''
-    Probability distribution of characteristic length for spacecraft collision with debris, 
-    all inputs are in standard SI units
+    generates num random characteristic lengths for debris from a collision
+
+    Parameter(s):
+    num : number of random lengths to generate
+    M : fit parameter given by calc_M (variable units)
+    L_min : minimum characteristic length to consider (m)
+    L_max : maximum characteristic length to consider (m)
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    L : array of random characteristic lengths (m)
     '''
 
-    def __init__(self, momtype=1, a=1/1000, b=None, xtol=1e-14, badvalue=None, name=None, longname=None, shapes=None, extradoc=None, seed=None):
-        super().__init__(momtype, a, b, xtol, badvalue, name, longname, shapes, extradoc, seed)
+    lam_min, lam_max = np.log10(L_min), np.log10(L_max)
+    beta = -1.71
+    P = np.random.uniform(size=num) # get random P values
+    lam = np.log10(10**(beta*lam_min) - P*(10**(beta*lam_min) - 10**(beta*lam_max)))/beta
+    return 10**lam
 
-    def cdf(self, L, M):
-        '''
-        cummulative distribution function for the charactersitic length of debris from a collision
+def randX_coll(num, x_min, x_max, L):
+    '''
+    generates num random log10(A/M) values for debris from a collision
 
-        Parameter(s):
-        L : characteristic length (m)
-        M : fit parameter given by calc_M (variable units)
+    Parameter(s):
+    num : number of random values to generate
+    M : fit parameter given by calc_M (variable units)
+    x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
+    x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
+    L : characteristic length of the debris (m)
 
-        Keyword Parameter(s): None
+    Keyword Parameter(s): None
 
-        Output(s):
-        CDF : value of CDF at L
-        '''
+    Output(s):
+    x : array of random log10(A/M) values (log10(m^2/kg))
+    '''
 
-        if M <= 0 or L < self.a: return 0
-        else: return self._cdf(L, M)
-    
-    def _cdf(self, L, M):
-        max_val = 0.1*(M**0.75)*(self.a**(-1.71)) # maximum value of the power law distribution
-        return (1- 0.1*(M**0.75)*(L**(-1.71)))/max_val
+    if L >= 11/100 : return _randX_coll_11(num, x_min, x_max, L)
+    elif L <= 8/100 : return _randX_coll_8(num, x_min, x_max, L)
+    else:
+        comp = 10*(np.log10(L) + 1.05)
+        if np.random.uniform() > comp : return _randX_coll_11(num, x_min, x_max, L)
+        else : return _randX_coll_8(num, x_min, x_max, L)
+
+def _randX_coll_8(num, x_min, x_max, L):
+    '''
+    generates num random log10(A/M) values for debris from a collision, assuming that
+    the characteristic length of the debris is less than 8cm
+
+    Parameter(s):
+    num : number of random values to generate
+    M : fit parameter given by calc_M (variable units)
+    x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
+    x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
+    L : characteristic length of the debris (m)
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    x : array of random log10(A/M) values (log10(m^2/kg))
+    '''
+
+    lam = np.log10(L)
+
+    # define functions for determining normal distribution parameters
+    def mu_soc(lambda_c):
+        if lambda_c <= -1.75 : return -0.3
+        elif lambda_c < -1.25 : return -0.3 - 1.4*(lambda_c + 1.75)
+        else : return -1
+
+    def sigma_soc(lambda_c):
+        if lambda_c <= -3.5 : return 0.2
+        else : return 0.2 + 0.1333*(lambda_c + 3.5)
+
+    P = np.random.uniform(size=num) # get random P values
+    # use these to generate random x-values
+    x = sigma_soc(lam)*np.sqrt(2)*erfinv(P + erf((x_min - mu_soc(lam)/(sigma_soc(lam)*np.sqrt(2))))) + mu_soc(lam)
+    return x
+
 
 class AMcoll_dist(rv_continuous):
     '''probability distribution for the A/M of fragments from a collision, given a characteristic length.
@@ -115,7 +169,7 @@ class AMcoll_dist(rv_continuous):
 
         def mu2_sc(lambda_c):
             if lambda_c <= -0.7 : return -1.2
-            elif lambda_c < -0.1 : return -1.2 - 1.333(lambda_c + 0.7)
+            elif lambda_c < -0.1 : return -1.2 - 1.333*(lambda_c + 0.7)
             else : return -2
 
         def sigma2_sc(lambda_c):
@@ -163,28 +217,3 @@ class AMcoll_dist(rv_continuous):
         '''
 
         return self._pdf(chi, lambda_c)
-
-class dvcoll_dist(rv_continuous):
-    '''generates a random change in velocity for debris from a collision, based on the A/M
-    ratio'''
-
-    def _pdf(self, v, chi):
-        mu = 0.9*chi + 2.9
-        sigma = 0.4
-        return norm.pdf(v, mu, sigma)
-
-    def pdf(self, v, chi):
-        '''
-        probability distribution function for the log of the ejection velocity of debris
-
-        Parameter(s):
-        v : log10 of the ejection velocity (log10(m/s))
-        chi : log10 of A/M (log10(m^2/kg))
-
-        Keyword Parameter(s): None
-
-        Output(s):
-        PDF : value of the pdf at v, given chi
-        '''
-
-        return self._pdf(v, chi)
