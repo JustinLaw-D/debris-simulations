@@ -1,8 +1,5 @@
 # implementation of the NASA standard breakup model
-# TODO: FIX NORMALIZATION IN EVERYTHING
 
-from imp import load_module
-from scipy.stats import norm
 from scipy.special import erf, erfinv
 import numpy as np
 
@@ -64,13 +61,12 @@ def find_A(L):
     if L < 0.00167 : return 0.540424*(L**2)
     else : return 0.556945*(L**2.0047077)
 
-def randL_coll(num, M, L_min, L_max):
+def randL_coll(num, L_min, L_max):
     '''
     generates num random characteristic lengths for debris from a collision
 
     Parameter(s):
     num : number of random lengths to generate
-    M : fit parameter given by calc_M (variable units)
     L_min : minimum characteristic length to consider (m)
     L_max : maximum characteristic length to consider (m)
 
@@ -92,7 +88,6 @@ def randX_coll(num, x_min, x_max, L):
 
     Parameter(s):
     num : number of random values to generate
-    M : fit parameter given by calc_M (variable units)
     x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
     x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
     L : characteristic length of the debris (m)
@@ -117,7 +112,6 @@ def _randX_coll_8(num, x_min, x_max, L):
 
     Parameter(s):
     num : number of random values to generate
-    M : fit parameter given by calc_M (variable units)
     x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
     x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
     L : characteristic length of the debris (m)
@@ -139,81 +133,124 @@ def _randX_coll_8(num, x_min, x_max, L):
     def sigma_soc(lambda_c):
         if lambda_c <= -3.5 : return 0.2
         else : return 0.2 + 0.1333*(lambda_c + 3.5)
-
+    
+    mu = mu_soc(lam) # calculate parameters
+    sigma = sigma_soc(lam)
+    C = 1/(erf((x_max-mu)/(np.sqrt(2)*sigma)) - erf((x_min-mu)/(np.sqrt(2)*sigma))) # normalization factor
     P = np.random.uniform(size=num) # get random P values
     # use these to generate random x-values
-    x = sigma_soc(lam)*np.sqrt(2)*erfinv(P + erf((x_min - mu_soc(lam)/(sigma_soc(lam)*np.sqrt(2))))) + mu_soc(lam)
+    x = sigma*np.sqrt(2)*erfinv(P/C + erf((x_min - mu)/(sigma*np.sqrt(2)))) + mu
     return x
 
+def _randX_coll_11(num, x_min, x_max, L):
+    '''
+    generates num random log10(A/M) values for debris from a collision, assuming that
+    the characteristic length of the debris is greater than 11cm
 
-class AMcoll_dist(rv_continuous):
-    '''probability distribution for the A/M of fragments from a collision, given a characteristic length.
-    all inputs in log_10 of standard SI units.'''
+    Parameter(s):
+    num : number of random values to generate
+    x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
+    x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
+    L : characteristic length of the debris (m)
 
-    def _pdf11(self, chi, lambda_c):
-        
-        def alpha_sc(lambda_c):
+    Keyword Parameter(s): None
+
+    Output(s):
+    x : array of random log10(A/M) values (log10(m^2/kg))
+    '''
+
+    lam = np.log10(L)
+
+    # define functions for determining normal distribution parameters
+    def alpha_sc(lambda_c):
             if lambda_c <= -1.95 : return 0
             elif lambda_c < 0.55 : return 0.3 + 0.4*(lambda_c + 1.2)
             else : return 1
 
-        def mu1_sc(lambda_c):
-            if lambda_c <= -1.1 : return -0.6
-            elif lambda_c < 0 : return -0.6 - 0.318*(lambda_c + 1.1)
-            else : return -0.95
+    def mu1_sc(lambda_c):
+        if lambda_c <= -1.1 : return -0.6
+        elif lambda_c < 0 : return -0.6 - 0.318*(lambda_c + 1.1)
+        else : return -0.95
 
-        def sigma1_sc(lambda_c):
-            if lambda_c <= -1.3 : return 0.1
-            elif lambda_c < -0.3 : return 0.1 + 0.2*(lambda_c + 1.3)
-            else : return 0.3
+    def sigma1_sc(lambda_c):
+        if lambda_c <= -1.3 : return 0.1
+        elif lambda_c < -0.3 : return 0.1 + 0.2*(lambda_c + 1.3)
+        else : return 0.3
 
-        def mu2_sc(lambda_c):
-            if lambda_c <= -0.7 : return -1.2
-            elif lambda_c < -0.1 : return -1.2 - 1.333*(lambda_c + 0.7)
-            else : return -2
+    def mu2_sc(lambda_c):
+        if lambda_c <= -0.7 : return -1.2
+        elif lambda_c < -0.1 : return -1.2 - 1.333*(lambda_c + 0.7)
+        else : return -2
 
-        def sigma2_sc(lambda_c):
-            if lambda_c <= -0.5 : return 0.5
-            elif lambda_c < -0.3 : return 0.5 - (lambda_c + 0.5)
-            else : return 0.3
+    def sigma2_sc(lambda_c):
+        if lambda_c <= -0.5 : return 0.5
+        elif lambda_c < -0.3 : return 0.5 - (lambda_c + 0.5)
+        else : return 0.3
+    
+    mu1 = mu1_sc(lam) # calculate parameters
+    sigma1 = sigma1_sc(lam)
+    mu2 = mu2_sc(lam)
+    sigma2 = sigma2_sc(lam)
+    alpha = alpha_sc(lam)
+    # compute normalization factor
+    top = alpha*erf((x_max-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_max-mu2)/(np.sqrt(2)*sigma2))
+    bot = alpha*erf((x_min-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_min-mu2)/(np.sqrt(2)*sigma2))
+    C = 1/(top - bot)
+    x_table = np.linspace(x_min, x_max, num=1000) # table of x values
+    # corresponding table of P values
+    P_table = C*(alpha*erf((x_table-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_table-mu2)/(np.sqrt(2)*sigma2)))
+    P = np.random.uniform(size=num) # get random P values
+    # use these to generate random x-values
+    x = np.zeros(P.shape)
+    for i in range(len(P)):
+        index = np.abs(P_table - P[i]).argmin() # find location of closest value on the table
+        x[i] = x_table[index] # use this to find the corresponding x-value
+    return x
 
-        norm_one, norm_two = norm.pdf(chi, mu1_sc(lambda_c), sigma1_sc(lambda_c)), norm.pdf(chi, mu2_sc(lambda_c), sigma2_sc(lambda_c))
-        return alpha_sc(lambda_c)*norm_one + (1-alpha_sc(lambda_c))*norm_two
+def randv_coll(num, v_min, v_max, x):
+    '''
+    generates num random log10(Delta v) values for debris from a collision
 
-    def _pdf8(self, chi, lambda_c):
+    Parameter(s):
+    num : number of random values to generate
+    v_min : minimum log10(Delta v) value to consider (log10(m/s))
+    v_max : maximum log10(Delta v) value to consider (log10(m/s))
+    x : log10(A/M) value of the debris (log10(m^2/kg))
 
-        def mu_soc(lambda_c):
-            if lambda_c <= -1.75 : return -0.3
-            elif lambda_c < -1.25 : return -0.3 - 1.4*(lambda_c + 1.75)
-            else : return -1
+    Keyword Parameter(s): None
 
-        def sigma_soc(lambda_c):
-            if lambda_c <= -3.5 : return 0.2
-            else : return 0.2 + 0.1333*(lambda_c + 3.5)
+    Output(s):
+    v : array of random log10(Delta v) values (log10(m/s))
+    '''
 
-        return norm.pdf(chi, mu_soc(lambda_c), sigma_soc(lambda_c))
+    mu = 0.9*x + 2.9 # calculate normal distribution parameters
+    sigma_fac = 0.4*np.sqrt(2)
+    C = 1/(erf((v_max-mu)/sigma_fac) - erf((v_min-mu)/sigma_fac)) # calculate normalization factor
+    P = np.random.uniform(size=num) # get random P values
+    # use these to generate random v-values
+    v = sigma_fac*erfinv(P/C + erf((v_min-mu)/sigma_fac)) + mu
+    return v
 
-    def _pdf(self, chi, lambda_c):
+def rand_direction(num):
+    '''
+    generates random directions in 3-d space
 
-        if lambda_c >= 11/100 : return self._pdf11(chi, lambda_c)
-        elif lambda_c <= 8/100 : return self._pdf8(chi, lambda_c)
-        else:
-            comp = 10*(lambda_c + 1.05)
-            if random.uniform(0,1) > comp : return self._pdf11(chi, lambda_c)
-            else : return self._pdf8(chi, lambda_c)
+    Parameter(s):
+    num : number of random values to generate
 
-    def pdf(self, chi, lambda_c):
-        '''
-        probability distribution function for the log of the A/M ratio of debris
+    Keyword Parameter(s): None
 
-        Parameter(s):
-        chi : log10 of A/M (log10(m^2/kg))
-        lambda_c : log10 of the characteristic length (log10(m))
+    Output(s)
+    u : array of 3-d unit vectors in cartesian coordinates
 
-        Keyword Parameter(s): None
+    Notes: Output u is a matrix, where the first row a list of x-coordinates,
+    the second y-coordinates, and the third z-coordinates
+    '''
 
-        Output(s):
-        PDF : value of the pdf at chi, given lambda_c
-        '''
-
-        return self._pdf(chi, lambda_c)
+    theta = np.random.uniform(0.0, np.pi, size=num) # generate inclinations
+    phi = np.random.uniform(0.0, 2*np.pi, size=num) # generate azimuthal angles
+    to_return = np.zeros((3, num)) # first row is x, second is y, third is z
+    to_return[0, :] = np.cos(phi)*np.sin(theta)
+    to_return[1, :] = np.sin(phi)*np.sin(theta)
+    to_return[2, :] = np.cos(theta)
+    return to_return
