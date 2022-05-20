@@ -198,7 +198,7 @@ def _randX_coll_11(num, x_min, x_max, L):
     C = 1/(top - bot)
     x_table = np.linspace(x_min, x_max, num=1000) # table of x values
     # corresponding table of P values
-    P_table = C*(alpha*erf((x_table-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_table-mu2)/(np.sqrt(2)*sigma2)))
+    P_table = C*(alpha*erf((x_table-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_table-mu2)/(np.sqrt(2)*sigma2)) - bot)
     P = np.random.uniform(size=num) # get random P values
     # use these to generate random x-values
     x = np.zeros(P.shape)
