@@ -5,18 +5,21 @@ from BreakupModel import *
 
 class Cell:
     
-    def __init__(self, S_i, D_i, N_li, lam, alt, dh, tau, del_t=None, sigma=None, m_s=None, v=None, alpha=None, 
-                 P=None, N_nli=None, num_L=None, L_min=None, L_max=None, num_chi=None, chi_min=None, chi_max=None):
+    def __init__(self, S_i, D_i, N_i, logL_edges, chi_edges, lam, alt, dh, tau_D, tau_N, del_t=None, sigma=None, 
+                 m_s=None, v=None, alpha=None, P=None):
         '''Constructor for Cell class
     
         Parameter(s):
         S_i : initial number of live satallites
         D_i : initial number of derelict satallites
-        N_li : initial number of lethal debris
+        N_i : initial array of number of debris by L and A/M
+        logL_edges : bin edges in log10 of characteristic length (log10(m))
+        chi_edges : bin edges in log10(A/M) (log10(m^2/kg))
+        lam : launch rate of satellites into the shell (1/yr)
         alt : altitude of the shell centre (km)
         dh : width of the shell (km)
-        lam : launch rate of satellites into the shell (1/yr)
-        tau : atmospheric drag lifetime
+        tau_D : atmospheric drag lifetime for derelicts (yr)
+        tau_N : array of atmospheric drag lifetimes for debris (yr)
 
         Keyword Parameter(s):
         del_t : mean satellite lifetime (yr, default 5yr)
@@ -25,20 +28,11 @@ class Cell:
         v : relative collision speed (km/s, default 10km/s)
         alpha : fraction of collisions a live satellites fails to avoid (default 0.2)
         P : post-mission disposal probability (default 0.95)
-        N_nli : initial amount of non-lethal debris (default 10x N_l)
-        num_L : number of bins for characteristic length (default 10)
-        L_min : minimum characterisic length (m, default 1/1000)
-        L_max : maximum characteristic length (m, default 1)
-        num_chi : number of bins for log10(A/M) (default 10)
-        chi_min : minimum log10(A/M) (m, default -2log(m^2/kg))
-        chi_max : maximum log10(A/M) (m, default 2log(m^2/kg))
 
         Output(s):
         Cell instance
 
-        Notes: By default, it's assumed that there is 10 times more non-lethal debris (assume L_c < 10cm) than 
-        letha debris (assume L > 10cm). The debris is then randomly distributed amoungst the bins under these 
-        assumptions.
+        Notes: By default, it's assumed that non-lethal debris has L_c < 10cm, and lethal debris has L > 10cm.
         '''
 
         # set default values as needed
@@ -54,59 +48,51 @@ class Cell:
             alpha = 0.2
         if P == None:
             P = 0.95
-        if N_nli == None:
-            N_nli = 10*N_li
-        if num_L == None:
-            num_L = 10
-        if L_min == None:
-            L_min = 1/1000
-        if L_max == None:
-            L_max = 1
-        if num_chi == None:
-            num_chi = 10
-        if chi_min == None:
-            chi_min = -2
-        if chi_max == None:
-            chi_max = 2
 
         # setup initial values for tracking live satallites, derelict satallites,
         # lethat debris, and non-lethal debris over time
-        self.S, self.D, self.N_l, self.N_nl = [S_i], [D_i], [N_li], [N_nli]
+        self.S, self.D = [S_i], [D_i]
+        self.N_bins = N_i
+        self.N_l, self.N_nl = [np.sum(N_i[N_i > 10])], [np.sum(N_i[N_i <= 10])]
 
         # setup other variables
-        self.C = 0
+        self.C_l = [0] # lethal collisions
+        self.C_nl = [0] # non-lethal collisions
         self.lam = lam
         self.m_s = m_s
         self.alt = alt
         self.dh = dh
-        self.tau = tau
+        self.tau_D = tau_D
+        self.tau_N = tau_N
         self.del_t = del_t
         self.sigma = sigma
         self.v = v
         self.alpha = alpha
         self.P = P
-        self.num_L = num_L
-        self.num_chi = num_chi
+        self.logL_edges = logL_edges
+        self.chi_edges = chi_edges
+        self.num_L = self.N_bins.shape[0]
+        self.num_chi = self.N_bins.shape[1]
 
         # generate bins for log10(L), chi
-        self.logL_edges = np.linspace(np.log10(L_min), np.log10(L_max), num=num_L+1)
-        self.chi_edges = np.linspace(chi_min, chi_max, num=num_chi+1)
+        #self.logL_edges = np.linspace(np.log10(L_min), np.log10(L_max), num=num_L+1)
+        #self.chi_edges = np.linspace(chi_min, chi_max, num=num_chi+1)
 
         # generate array for holding the current debris distribution (log10(L) is row, chi is column)
-        self.N_bins = np.zeros((num_L, num_chi))
+        #self.N_bins = np.zeros((num_L, num_chi))
 
-        # generate initial distributions
-        lethal_L = np.log10(randL_coll(self.N_l, 1e-1, L_max))
-        nlethal_L = np.log10(randL_coll(self.N_nl, L_min, 1e-2))
-        for i in range(num_L):
-            bin_L = 0
-            bin_bot_L, bin_top_L = self.logL_edges[i], self.logL_edges[i+1]
-            bin_L += len(lethal_L[bin_bot_L < lethal_L < bin_top_L])
-            bin_L += len(nlethal_L[bin_bot_L < nlethal_L < bin_top_L])
-            chi_dist = randX_coll(bin_L, chi_min, chi_max, (bin_bot_L + bin_top_L)/2)
-            for j in range(num_chi):
-                bin_bot_chi, bin_top_chi = self.chi_edges[i], self.chi_edges[i+1]
-                self.N_bins[i,j] = len(chi_dist[bin_bot_chi < chi_dist < bin_top_chi])
+        # generate initial distributions THIS IS BEING MOVED
+        #lethal_L = np.log10(randL_coll(self.N_l, 1e-1, L_max))
+        #nlethal_L = np.log10(randL_coll(self.N_nl, L_min, 1e-2))
+        #for i in range(num_L):
+        #    bin_L = 0
+        #    bin_bot_L, bin_top_L = self.logL_edges[i], self.logL_edges[i+1]
+        #    bin_L += len(lethal_L[bin_bot_L < lethal_L < bin_top_L])
+        #    bin_L += len(nlethal_L[bin_bot_L < nlethal_L < bin_top_L])
+        #    chi_dist = randX_coll(bin_L, chi_min, chi_max, (bin_bot_L + bin_top_L)/2)
+        #    for j in range(num_chi):
+        #        bin_bot_chi, bin_top_chi = self.chi_edges[i], self.chi_edges[i+1]
+        #        self.N_bins[i,j] = len(chi_dist[bin_bot_chi < chi_dist < bin_top_chi])
 
     def step(self, D_in, dt):
         '''
@@ -123,7 +109,7 @@ class Cell:
         Output(s):
         D_out : number of derelict satallites exiting the cell in dt
         N_out : matrix with the number of exiting debris from each bin in dt
-        D_dt : number of collisions between derelicts in dt
+        D_dt : number of collisions between satallites in dt
         C_dt : matrix with the number of collisions from each bin in dt
 
         Note: Assumes that collisions with debris of L_cm < 10cm cannot be avoided
@@ -137,132 +123,133 @@ class Cell:
 
         # compute the number of collisions from each debris type
         coll_S = np.zeros(self.N_bins.shape) # collisions with live satallites
-        coll_DS = 0
+        coll_SD = 0 # collisions between live and derelict satallites
         coll_D = np.zeros(self.N_bins.shape) # collisions with derelict satallites
         decay_N = np.zeros(self.N_bins.shape) # number of debris that decay
         decay_D = 0 # number of derelicts that decay
-        coll_DD = 0
-        rand = np.random.uniform() # random number to choose if fractional events occur
+        coll_DD = 0 # number of collisions between 
+        lethal_N = np.full(self.N_bins.shape, False) # whether or not each bin has lethal collisions
+
+        # handle debris events
         for i in (self.num_L):
             ave_L = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2) # average L value for these bins
             for j in (self.num_chi):
-                n = self.N_bins[i,j]/V
-                dSCdt = 0
-                dDCdt = 0
-                if ave_L < 10/100: # collisions cannot be avoided
-                    dSCdt = n*sigma*v*S
-                else:
-                    dSCdt = self.alpha*n*sigma*v*S
-                dDCdt = n*sigma*v*D
-                nS_col = dSCdt*dt
-                nD_col = dDCdt*dt
-                # randomly decide if a fractional collision occurs
-                if rand > (nS_col - int(nS_col)):
-                    coll_S[i,j] = int(nS_col)
-                else:
-                    coll_S[i,j] = int(nS_col) + 1
-                # randomly decide if a fractional collision occurs
-                if rand > (nD_col - int(nD_col)):
-                    coll_D[i,j] = int(nD_col)
-                else:
-                    coll_D[i,j] = int(nD_col) + 1
-                nN_decay = self.N_bins[i,j]/self.tau*dt # calculate decays
-                # randomly decide if a fractional decay occurs
-                if rand > (nN_decay - int(nN_decay)):
-                    decay_N[i,j] = int(nN_decay)
-                else:
-                    decay_N[i,j] = int(nN_decay) + 1
+                ave_chi = (self.chi_edges[i] + self.chi_edges[i+1])/2
+                nS_col, nD_col, nN_decay = self.N_events(S, D, self.N_bins[i,j], ave_L, self.tau_N[i,j], dt)
+                if is_catastrophic(self.m_s, ave_L, ave_chi, self.v) : lethal_N[i,j] = True
+                coll_S[i,j] = nS_col
+                coll_D[i,j] = nD_col
+                decay_N[i,j] = nN_decay
         
         # compute collisions involving derelicts
-        n = D/V
-        nSD_col = self.alpha*n*sigma*v*S*dt
-        n /= 2 # avoid double counting
-        nDD_col = n*sigma*v*D*dt
-        # randomly decide if a fractional collision occurs
-        if rand > (nSD_col - int(nSD_col)):
-            coll_DS = int(nSD_col)
-        else:
-            coll_DS = int(nSD_col) + 1
-        # randomly decide if a fractional collision occurs
-        if rand > (nDD_col - int(nDD_col)):
-            coll_DD = int(nDD_col)
-        else:
-            coll_DD = int(nDD_col) + 1
-        decay_D = D/self.tau*dt # calculate decays
-        # randomly decide if a fractional decay occurs
-        if rand > (decay_D - int(decay_D)):
-            decay_D = int(decay_D)
-        else:
-            decay_D = int(decay_D) + 1
+        coll_SD, coll_DD, decay_D = self.D_events(S, D, dt)
 
         # compute number of satallites launched and brought down
-        sat_up = self.lam*dt
-        # randomly decide if a fractional launch occurs
-        if rand > (sat_up - int(sat_up)):
-            sat_up = int(sat_up)
-        else:
-            sat_up = int(sat_up) + 1
-        sat_down = S/self.del_t*dt
-        # randomly decide if a fractional de-orbit occurs
-        if rand > (sat_down - int(sat_down)):
-            sat_down = int(sat_down)
-        else:
-            sat_down = int(sat_down) + 1
-        sat_down_fail = (1-self.P)*sat_down
-        if rand > (sat_down_fail - int(sat_down_fail)):
-            sat_down_fail = int(sat_down_fail)
-        else:
-            sat_down_fail = int(sat_down_fail) + 1
+        sat_up, sat_down, sat_down_fail = self.S_events(S, dt)
 
         # sum everything up and update values
-        C_dt = coll_S + coll_D
-        tot_coll_S, tot_coll_D = np.sum(coll_S) + coll_DS, np.sum(coll_D) + coll_DD
-        self.S.append(S + sat_up - sat_down - tot_coll_S)
-        self.D.append(D + sat_down_fail + )
+        # all satallite-satallite collisions are catastrophic
+        self.C_l.append(self.C_l[-1] + coll_SD + coll_DD + np.sum(coll_S[lethal_N]) + np.sum(coll_D[lethal_N]))
+        self.C_nl.append(self.C_nl[-1] + np.sum(coll_S[lethal_N == False]) + np.sum(coll_D[lethal_N == False]))
+        tot_coll_lS, tot_coll_nlS = np.sum(coll_S[lethal_N]), np.sum(coll_S[lethal_N == False])
+        tot_coll_lD = np.sum(coll_D[lethal_N])
+        self.S.append(S + sat_up - sat_down - tot_coll_lS - tot_coll_nlS - coll_SD)
+        self.D.append(D + sat_down_fail + D_in + tot_coll_nlS - tot_coll_lD - coll_SD - 2*coll_DD - decay_D)
+        return decay_D, decay_N, coll_SD + coll_DD, coll_S + coll_D
 
-    def dxdt_cell(self, x):
+    def N_events(self, S, D, N, ave_L, tau, dt):
         '''
-        Calculates the rate of change of x given the x of this cell, ignoring contributions
-        from the cell above
+        calculates the number of collisions between debris with the given
+        ave_L, ave_chi, and tau with stallites in a band, as well as the amount of
+        debris that decays out of the band, in a given time step dt.
 
         Parameter(s):
-        x : current x-value of this cell
+        S : number of live satellites in the band
+        D : number of derelict satellites in the band
+        N : number of pieces of debris in the band, of this particular type
+        ave_L : average characteristic length of the debris (m)
+        tau : atmospheric drag lifetime of the debris in the band (yr)
+        dt : time period (yr)
 
+        Keyword Parameter(s): None
+        
         Output(s):
-        dxdt_cell : array of [dSdt_cell, dDdt_cell, dNdt_cell, dCdt_cell]
+        nS_col : number of collisions between debris and live satellites in the time step
+        nD_col : number of collisions between debris and derelict satellites in the time step
+        nN_decay : number of debris that decay out of the shell in the time step
         '''
-
         sigma = self.sigma/1e6 # convert to km^2
         v = self.v*365.25*24*60*60 # convert to km/yr
         V = 4*np.pi*(6371 + self.alt)**2*self.dh # volume of the shell
-        S, D, N = x[0], x[1], x[2] # get current values
+        n = N/V # number density of the debris
 
-        # run calculation
-        n = (N + D/2)/V
-        dSdt_cell = self.lam - S/self.del_t - (self.delta + self.alpha)*n*sigma*v*S
-        dDdt_cell = (1-self.P)*S/self.del_t + self.delta*n*sigma*v*S - n*sigma*v*D - D/self.tau
-        dNdt_cell = n*sigma*v*self.N_0*(self.alpha*S + D) - N/self.tau
-        dCdt_cell = (self.delta + self.alpha)*n*sigma*v*S
+        dSdt = 0 # rate of collisions between debris and satallites (live/derelict)
+        dDdt = 0
+        if ave_L < 10/100: # collisions cannot be avoided
+            dSdt = n*sigma*v*S
+        else: # collisions can be avoided
+            dSdt = self.alpha*n*sigma*v*S
+        dDdt = n*sigma*v*D 
+        nS_col = dSdt*dt # convert rates to number of collisions
+        nD_col = dDdt*dt
+        # randomly decide if a fractional collision occurs
+        nS_col = rand_round(nS_col)
+        nD_col = rand_round(nD_col)
+        nN_decay = N/tau*dt # calculate decays
+        nN_decay = rand_round(nN_decay) # randomly decide if a fractional decay occurs
 
-        return np.array([dSdt_cell, dDdt_cell, dNdt_cell, dCdt_cell])
-
-    def dxdt_out(self, x):
+    def D_events(self, S, D, dt):
         '''
-        Calculates the rate of change of x leaving the cell into the one below
+        calculates the number of collisions between derelicts with stallites in a band, 
+        as well as the amount of derelicts that decays out of the band, in a given time step dt.
 
         Parameter(s):
-        x : current x-value of this cell
+        S : number of live satellites in the band
+        D : number of derelict satellites in the band
+        dt : time period (yr)
 
-        Output(s):
-        dxdt_out : array of [dSdt_out, dDdt_out, dNdt_out, dCdt_out]
-        '''
+        Keyword Parameter(s): None
         
-        D, N = x[1], x[2] # get current values
+        Output(s):
+        nDD_col : number of collisions between two derelicts in the time step
+        nSD_col : number of collisions between a derelelict and live satallite in the time step
+        nD_decay : number of derelicts that decay out of the shell in the time step
+        '''
+        sigma = self.sigma/1e6 # convert to km^2
+        v = self.v*365.25*24*60*60 # convert to km/yr
+        V = 4*np.pi*(6371 + self.alt)**2*self.dh # volume of the shell
+        n = D/V # number density of the derelicts
 
-        # run calculation
-        dSdt_out = 0
-        dDdt_out = D/self.tau
-        dNdt_out = N/self.tau
-        dCdt_out = 0
+        # rate of collisions between derelicts and satallites (live/derelict)
+        dSDdt = n*sigma*v*S # collisions cannot be avoided
+        n /= 2 # avoid double counting
+        dDDdt = n*sigma*v*D 
+        nSD_col = dSDdt*dt # convert rates to number of collisions
+        nDD_col = dDDdt*dt
+        # randomly decide if a fractional collision occurs
+        nSD_col = rand_round(nSD_col)
+        nDD_col = rand_round(nDD_col)
+        nD_decay = D/self.tau_D*dt # calculate decays
+        nD_decay = rand_round(nD_decay) # randomly decide if a fractional decay occurs
+        return nSD_col, nDD_col, nD_decay
 
-        return np.array([dSdt_out, dDdt_out, dNdt_out, dCdt_out])
+    def S_events(self, S, dt):
+        '''
+        calculates the number satallites launched, that attempt to de-orbit, and that
+        fail to de-orbit in dt
+
+        Parameter(s):
+        S : number of live satellites in the band
+        dt : time period (yr)
+
+        Keyword Parameter(s): None
+        
+        Output(s):
+        sat_up : number of satallites launched in the time step
+        sat_down : number of satallites that attempt to de-orbit in the time step
+        sat_down_fail : number of satallites that fail a de-orbit attempt in the time step
+        '''
+
+        sat_up = rand_round(self.lam*dt)
+        sat_down = rand_round(S/self.del_t*dt)
+        sat_down_fail = rand_round(sat_down*(1-self.P))

@@ -3,6 +3,50 @@
 from scipy.special import erf, erfinv
 import numpy as np
 
+def rand_round(num):
+    '''
+    randomly rounds a real number either up or down to the nearest integer
+
+    Parameter(s):
+    num : a real number
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    int_num : number rounded to an integer
+    '''
+
+    if num == 0 : return num # nothing to do in this case
+    sign_fac = num/num # factor to account for the sign of the number
+    rand = np.random.uniform() # get random number between 0 and 1
+    if rand > abs(num - int(num)): # randomly round
+        return int(num)
+    else:
+        return int(num) + sign_fac
+
+def is_catastrophic(m_s, L, AM, v):
+    '''
+    determines if a collision between debris and a satallite is catastrophic
+
+    Parameter(s):
+    m_s : mass of the satallite (kg)
+    L : characteristic length of the debris (m)
+    AM : area to mass ratio of the debris (m^2/kg)
+    v : relative velocity of the objects (km/s)
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    cat : True if the collision is catastrophic, False otherwise
+    '''
+    
+    v *= 1000 # convert to m/s
+    m_d = find_A(L)/AM # mass of the debris (on average)
+    k_d = 0.5*m_d*(v**2) # relative kinetic energy of the debris
+    dec_fact = (k_d/m_s)/1000 # factor for making the decision (J/g)
+    if dec_fact >= 40 : return True
+    else : return False
+
 def calc_M(m_s, m_d, v):
     '''
     calculates the M factor used for L distribution calculation, and
