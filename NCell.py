@@ -65,7 +65,7 @@ class NCell:
                         v=v[i], delta=delta[i], alpha=alpha[i], P=P[i], N_0=N_0[i]) # create cell
             self.cells.append(cell)
 
-    def run_live_sim(self, method, dt=1, upper=True, dt_live=1, S=True, D=True, N=True):
+    def run_live_sim(self, dt=1, upper=True, dt_live=1, S=True, D=True, N=True):
         '''
         Runs a live simulation of the evolution of orbital shells for total time T, using the desired
         method, displaying current results, and allowing for the satellite launch rate of some shells
