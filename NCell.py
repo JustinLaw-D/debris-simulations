@@ -5,6 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from BreakupModel import *
 
+G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
+Me = 5.97219e24 # mass of Earth (kg)
+
 class NCell:
 
     def __init__(self, S, D, N_l, alts, dh, lam, drag_lifetime, del_t=None, sigma=None, v=None, 
@@ -55,7 +58,7 @@ class NCell:
         if v == None:
             v = [None]*S.size
         if delta == None:
-            delta = [None]*S.size
+            delta = [10]*S.size
         if alpha == None:
             alpha = [None]*S.size
         if P == None:
@@ -67,6 +70,8 @@ class NCell:
 
         self.alts = alts
         self.dh = dh
+        self.num_L = num_L
+        self.num_chi = num_chi
         self.time = 0 # index of current time step
         self.t = [0] # list of times traversed
         self.cells = [] # start list of cells
@@ -81,7 +86,7 @@ class NCell:
             N_initial, tau_N = np.zeros((num_L, num_chi))
             # generate initial distributions
             lethal_L = np.log10(randL_coll(self.N_l[i], 1e-1, L_max))
-            nlethal_L = np.log10(randL_coll(self.N_l[i], L_min, 1e-2))
+            nlethal_L = np.log10(randL_coll(delta[i]*self.N_l[i], L_min, 1e-1))
             for j in range(num_L):
                 bin_L = 0
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
@@ -98,6 +103,112 @@ class NCell:
             cell = Cell(S[i], D[i], N_initial, self.logL_edges, self.chi_edges, lam[i], alts[i], dh[i], tau_D, 
                         tau_N, del_t=del_t[i], sigma=sigma[i], m_s=m_s[i], v=v[i], alpha=alpha[i], P=P[i])
             self.cells.append(cell)
+            if i == S.size - 1: self.upper_N = N_initial # take the debris field above to be initial debris of top
+
+    def run_sim(self, T, dt=1, upper=True):
+        '''
+        simulates the evolution of the debris-satallite system for T years
+
+        Parameter(s):
+        T : length of the simulation (yr)
+
+        Keyword Parameter(s):
+        dt : timestep used by the simulation (yr, default 1yr)
+        upper : whether or not to have debris come into the top shell (bool, default True)
+
+        Output(s): None
+        '''
+
+        while self.t[self.time] < T:
+            change_N = [np.zeros((self.num_L, self.num_chi))]*len(self.cells) # arrays changes in debris values
+            
+            # get initial D_in, N_in values
+            D_in = np.zeros((self.num_L, self.num_chi))
+            N_in  = np.zeros((self.num_L, self.num_chi))
+            top_Nin = np.zeros((self.num_L, self.num_chi)) # debris going into top cell
+            top_cell = self.cells[-1]
+            for i in range(self.num_L):
+                for j in range(self.num_chi):
+                    top_Nin[i,j] = rand_round((self.upper_N[i,j]/top_cell.tau_N[i,j])*dt)
+            if upper : N_in = top_Nin
+
+            # iterate through cells, from top to bottom
+            for i in range(-1, len(self.cells), -1):
+                curr_cell = self.cells[i]
+                change_N[i] += N_in
+                m_s = curr_cell.m_s
+                D_in, N_in, sat_coll, N_coll = curr_cell.step(D_in, dt)
+                change_N[i] -= N_in # loses debris decaying out
+                # simulate collisions
+                change_N = self.sim_colls(change_N, sat_coll, m_s, m_s, i)
+                for j in range(self.num_L):
+                    ave_L = 10**((self.logL_edges[j] + self.logL_edges[j+1])/2)
+                    for k in range(self.num_chi):
+                        ave_AM = 10**((self.chi_edges[k] + self.chi_edges[k+1])/2)
+                        m_d = find_A(ave_L)/ave_AM
+                        change_N = self.sim_colls(change_N, N_coll[j,k], m_s, m_d, i)
+                        
+                # add on debris lost to collisions
+                change_N[i] -= N_coll
+
+            # update time
+            self.t.append(self.t[self.time] + dt)
+            self.time +=1
+
+    def sim_colls(self, change_N, num, m_1, m_2, index):
+        '''
+        updates change_N by running num collisions between two objects of mass m_1, m_2 in
+        the index'th cell
+        
+        Parameter(s):
+        change_N : current change_N values (list of matrices)
+        num : number of collisions to simulate
+        m_1 : mass of the first object (kg)
+        m_2 : mass of the second object (kg)
+        index : index of the cell the collision occurs in
+
+        Keyword Parameter(s): None
+
+        Output(s):
+        nchange_N : the new change_N values (list of matrices)
+        '''
+
+        v_rel = self.cells[index].v # collision velocity
+        v_orbit = self.cells[index].v_orbit # orbital velocity
+        alt = self.alts[index] # altitude of the orbit
+        M = calc_M(m_1, m_2, v_rel) # M factor
+        Lmin, Lmax = 10**self.logL_edges[0], 10**self.logL_edges[-1] # min and max characteristic lengths
+        chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1] # min and max chi values
+        N_debris = 0 # total number of debris
+        for i in range(num):
+            N_debris += calc_Ntot_coll(M, Lmin, Lmax)
+        # calculate length distribution
+        L_dist = randL_coll(N_debris, Lmin, Lmax)
+        L_binned = np.zeros(self.num_L) # those random values binned
+        for i in range(self.num_L):
+            L_bot, L_top = 10**self.logL_edges[i], 10**self.logL_edges[i+1]
+            L_binned[i] = len(L_dist[(L_dist > L_bot) & (L_dist < L_top)])
+        for i in range(self.num_L): # iterate through each bin
+            L_ave = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2)
+            chi_dist = randX_coll(L_binned[i], chi_min, chi_max, L_ave) # get chi distribution for all debris
+            chi_binned = np.zeros(self.num_chi) # those random values binned
+            for j in range(self.num_chi):
+                chi_bot, chi_top = self.chi_edges[j], self.chi_edges[j+1]
+                chi_binned[j] = len(chi_dist[(chi_dist > chi_bot) & (chi_dist < chi_top)])
+            # calculate velocity distribution, and  update values
+            for j in range(self.num_chi):
+                chi_ave = (self.chi_edges[i] + self.chi_edges[i+1])/2
+                v_dist = randv_coll(chi_binned[j], chi_ave) # get v_kick distribution for all debris
+                direction_dist = rand_direction(chi_binned[j]) # get random directions for v_kick for all debris
+                for k in len(v_dist): # iterate through the random velocity values
+                    v_loc, direction = 10**v_dist[k], direction_dist[:,k]
+                    # calculate new orbital velocity
+                    v2 = np.sqrt((v_orbit + v_loc*direction[0])**2 + (v_loc*direction[1])**2 + (v_loc*direction[2])**2)
+                    alt_new = 1/(2/alt - v2/(G*Me)) # calculate new altitude with vis-viva equation
+                    index_new = self.alt_to_index(alt_new) # get index that the debris goes to
+                    change_N[index_new][i,j] += 1 # add the debris to the right location
+
+        return change_N
 
     def run_live_sim(self, dt=1, upper=True, dt_live=1, S=True, D=True, N=True):
         '''

@@ -3,6 +3,9 @@
 import numpy as np
 from BreakupModel import *
 
+G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
+Me = 5.97219e24 # mass of Earth (kg)
+
 class Cell:
     
     def __init__(self, S_i, D_i, N_i, logL_edges, chi_edges, lam, alt, dh, tau_D, tau_N, del_t=None, sigma=None, 
@@ -67,6 +70,7 @@ class Cell:
         self.del_t = del_t
         self.sigma = sigma
         self.v = v
+        self.v_orbit = np.sqrt(G*Me/self.alt) # orbital speed (on average)
         self.alpha = alpha
         self.P = P
         self.logL_edges = logL_edges
@@ -74,29 +78,8 @@ class Cell:
         self.num_L = self.N_bins.shape[0]
         self.num_chi = self.N_bins.shape[1]
 
-        # generate bins for log10(L), chi
-        #self.logL_edges = np.linspace(np.log10(L_min), np.log10(L_max), num=num_L+1)
-        #self.chi_edges = np.linspace(chi_min, chi_max, num=num_chi+1)
-
-        # generate array for holding the current debris distribution (log10(L) is row, chi is column)
-        #self.N_bins = np.zeros((num_L, num_chi))
-
-        # generate initial distributions THIS IS BEING MOVED
-        #lethal_L = np.log10(randL_coll(self.N_l, 1e-1, L_max))
-        #nlethal_L = np.log10(randL_coll(self.N_nl, L_min, 1e-2))
-        #for i in range(num_L):
-        #    bin_L = 0
-        #    bin_bot_L, bin_top_L = self.logL_edges[i], self.logL_edges[i+1]
-        #    bin_L += len(lethal_L[bin_bot_L < lethal_L < bin_top_L])
-        #    bin_L += len(nlethal_L[bin_bot_L < nlethal_L < bin_top_L])
-        #    chi_dist = randX_coll(bin_L, chi_min, chi_max, (bin_bot_L + bin_top_L)/2)
-        #    for j in range(num_chi):
-        #        bin_bot_chi, bin_top_chi = self.chi_edges[i], self.chi_edges[i+1]
-        #        self.N_bins[i,j] = len(chi_dist[bin_bot_chi < chi_dist < bin_top_chi])
-
     def step(self, D_in, dt):
         '''
-        TODO: SPLIT THIS INTO A TON OF SEPERATE FUNCTIONS
         calculates the number of collisions and decays from each debris bin, the number
         of decaying derelicts, and updates the numbers for S, D, C based on this
 
@@ -114,12 +97,8 @@ class Cell:
 
         Note: Assumes that collisions with debris of L_cm < 10cm cannot be avoided
         '''
-
-        sigma = self.sigma/1e6 # convert to km^2
-        v = self.v*365.25*24*60*60 # convert to km/yr
-        V = 4*np.pi*(6371 + self.alt)**2*self.dh # volume of the shell
+        
         S, D = self.S[-1], self.D[-1]
-        S_change, D_change = 0, 0 # amount S, D change in the time step
 
         # compute the number of collisions from each debris type
         coll_S = np.zeros(self.N_bins.shape) # collisions with live satallites
@@ -134,7 +113,7 @@ class Cell:
         for i in (self.num_L):
             ave_L = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2) # average L value for these bins
             for j in (self.num_chi):
-                ave_chi = (self.chi_edges[i] + self.chi_edges[i+1])/2
+                ave_chi = (self.chi_edges[j] + self.chi_edges[j+1])/2
                 nS_col, nD_col, nN_decay = self.N_events(S, D, self.N_bins[i,j], ave_L, self.tau_N[i,j], dt)
                 if is_catastrophic(self.m_s, ave_L, ave_chi, self.v) : lethal_N[i,j] = True
                 coll_S[i,j] = nS_col
@@ -197,6 +176,7 @@ class Cell:
         nD_col = rand_round(nD_col)
         nN_decay = N/tau*dt # calculate decays
         nN_decay = rand_round(nN_decay) # randomly decide if a fractional decay occurs
+        return nS_col, nD_col, nN_decay
 
     def D_events(self, S, D, dt):
         '''
@@ -253,3 +233,5 @@ class Cell:
         sat_up = rand_round(self.lam*dt)
         sat_down = rand_round(S/self.del_t*dt)
         sat_down_fail = rand_round(sat_down*(1-self.P))
+
+        return sat_up, sat_down, sat_down_fail

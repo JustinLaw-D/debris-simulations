@@ -49,8 +49,7 @@ def is_catastrophic(m_s, L, AM, v):
 
 def calc_M(m_s, m_d, v):
     '''
-    calculates the M factor used for L distribution calculation, and
-    determines if a collision is catestrophic or not
+    calculates the M factor used for L distribution calculation
     
     Parameter(s):
     m_s : satellite mass (kg)
@@ -66,17 +65,18 @@ def calc_M(m_s, m_d, v):
 
     E_p = (0.5*m_d*(v**2)/m_s)/1000 # E_p in J/g
 
-    if E_p >= 40 : return m_s + m_d, True # catestrophic collision
-    else : return m_d*(v/1000), False # non-catestrophic collision
+    if E_p >= 40 : return m_s + m_d # catestrophic collision
+    else : return m_d*(v/1000) # non-catestrophic collision
 
-def calc_Ntot_coll(M, Lmin):
+def calc_Ntot_coll(M, Lmin, Lmax):
     '''
     calculates the total number of debris produced with characteristic length
-    greater than Lmin, for a collision
+    between Lmin and Lmax, for a collision
 
     Parameter(s):
     M : fit parameter given by calc_M (variable units)
     Lmin : minimum characteristic length (m)
+    Lmax : maximum characteristic length (m)
 
     Keyword Parameter(s): None
 
@@ -87,7 +87,7 @@ def calc_Ntot_coll(M, Lmin):
     Model output is a continuous value, and is simply truncated
     '''
 
-    return int(0.1*(M**0.75)*(Lmin**(-1.71)))
+    return int(0.1*(M**0.75)*(Lmin**(-1.71)) - 0.1*(M**0.75)*(Lmax**(-1.71)))
 
 def find_A(L):
     '''
@@ -251,14 +251,12 @@ def _randX_coll_11(num, x_min, x_max, L):
         x[i] = x_table[index] # use this to find the corresponding x-value
     return x
 
-def randv_coll(num, v_min, v_max, x):
+def randv_coll(num, x):
     '''
     generates num random log10(Delta v) values for debris from a collision
 
     Parameter(s):
     num : number of random values to generate
-    v_min : minimum log10(Delta v) value to consider (log10(m/s))
-    v_max : maximum log10(Delta v) value to consider (log10(m/s))
     x : log10(A/M) value of the debris (log10(m^2/kg))
 
     Keyword Parameter(s): None
@@ -269,7 +267,7 @@ def randv_coll(num, v_min, v_max, x):
 
     mu = 0.9*x + 2.9 # calculate normal distribution parameters
     sigma_fac = 0.4*np.sqrt(2)
-    C = 1/(erf((v_max-mu)/sigma_fac) - erf((v_min-mu)/sigma_fac)) # calculate normalization factor
+    C = 1/2 # calculate normalization factor
     P = np.random.uniform(size=num) # get random P values
     # use these to generate random v-values
     v = sigma_fac*erfinv(P/C + erf((v_min-mu)/sigma_fac)) + mu
