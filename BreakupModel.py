@@ -270,7 +270,7 @@ def randv_coll(num, x):
     C = 1/2 # calculate normalization factor
     P = np.random.uniform(size=num) # get random P values
     # use these to generate random v-values
-    v = sigma_fac*erfinv(P/C + erf((v_min-mu)/sigma_fac)) + mu
+    v = sigma_fac*erfinv(P/C - 1) + mu
     return v
 
 def rand_direction(num):
