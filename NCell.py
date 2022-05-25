@@ -4,6 +4,7 @@ from Cell import Cell
 import numpy as np
 import matplotlib.pyplot as plt
 from BreakupModel import *
+from copy import deepcopy
 
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
 Me = 5.97219e24 # mass of Earth (kg)
@@ -12,7 +13,7 @@ class NCell:
 
     def __init__(self, S, D, N_l, alts, dh, lam, drag_lifetime, del_t=None, sigma=None, v=None, 
                 delta=None, alpha=None, P=None, m_s=None, AM_sat=None, L_min=1e-3, L_max=1, num_L=10,
-                chi_min=-2, chi_max=2, num_chi=10):
+                chi_min=-3, chi_max=3, num_chi=10):
         '''
         Constructor for NCell class
     
@@ -37,8 +38,8 @@ class NCell:
         L_min : minimum characteristic length to consider (m, default 1mm)
         L_max : maximum characteristic length to consider (m, default 1m)
         num_L : number of debris bins in characteristic length (default 10)
-        chi_min : minimum log10(A/M) to consider (log10(m^2/kg), default -2)
-        chi_max : maximum log10(A/M) to consider (log10(m^2/kg), default 2)
+        chi_min : minimum log10(A/M) to consider (log10(m^2/kg), default -3)
+        chi_max : maximum log10(A/M) to consider (log10(m^2/kg), default 3)
         num_chi : number of debris bins in log10(A/M) (default 10)
 
         Output(s):
@@ -83,27 +84,28 @@ class NCell:
             # compute atmospheric drag lifetime for satallites in the shell
             tau_D = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_sat[i])
             # calculate decay paremeters for debris, initial debris values
-            N_initial, tau_N = np.zeros((num_L, num_chi))
+            N_initial, tau_N = np.zeros((num_L, num_chi), dtype=np.int64), np.zeros((num_L, num_chi))
             # generate initial distributions
-            lethal_L = np.log10(randL_coll(self.N_l[i], 1e-1, L_max))
-            nlethal_L = np.log10(randL_coll(delta[i]*self.N_l[i], L_min, 1e-1))
+            lethal_L = np.log10(randL_coll(N_l[i], 1e-1, L_max))
+            nlethal_L = np.log10(randL_coll(delta[i]*N_l[i], L_min, 1e-1))
             for j in range(num_L):
                 bin_L = 0
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
-                bin_L += len(lethal_L[bin_bot_L < lethal_L < bin_top_L])
-                bin_L += len(nlethal_L[bin_bot_L < nlethal_L < bin_top_L])
-                chi_dist = randX_coll(bin_L, chi_min, chi_max, (bin_bot_L + bin_top_L)/2)
+                ave_L = 10**((bin_bot_L+bin_top_L)/2)
+                bin_L += len(lethal_L[(bin_bot_L < lethal_L) & (lethal_L < bin_top_L)])
+                bin_L += len(nlethal_L[(bin_bot_L < nlethal_L) & (nlethal_L < bin_top_L)])
+                chi_dist = randX_coll(bin_L, chi_min, chi_max, ave_L)
                 for k in range(num_chi):
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi + bin_top_chi)/2
-                    self.N_initial[j,k] = len(chi_dist[bin_bot_chi < chi_dist < bin_top_chi])
-                    self.tau_N[j,k] = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, 10**ave_chi)
+                    N_initial[j,k] = len(chi_dist[(bin_bot_chi < chi_dist) & (chi_dist < bin_top_chi)])
+                    tau_N[j,k] = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, 10**ave_chi)
 
             # initialize cell
             cell = Cell(S[i], D[i], N_initial, self.logL_edges, self.chi_edges, lam[i], alts[i], dh[i], tau_D, 
                         tau_N, del_t=del_t[i], sigma=sigma[i], m_s=m_s[i], v=v[i], alpha=alpha[i], P=P[i])
             self.cells.append(cell)
-            if i == S.size - 1: self.upper_N = N_initial # take the debris field above to be initial debris of top
+            if i == S.size - 1: self.upper_N = deepcopy(N_initial) # take the debris field above to be initial debris of top
 
     def run_sim(self, T, dt=1, upper=True):
         '''
@@ -120,12 +122,14 @@ class NCell:
         '''
 
         while self.t[self.time] < T:
-            change_N = [np.zeros((self.num_L, self.num_chi))]*len(self.cells) # arrays changes in debris values
+            change_N = [] # arrays changes in debris values
+            for i in range(len(self.cells)):
+                change_N.append(np.zeros((self.num_L, self.num_chi),dtype=np.int64))
             
             # get initial D_in, N_in values
-            D_in = np.zeros((self.num_L, self.num_chi))
-            N_in  = np.zeros((self.num_L, self.num_chi))
-            top_Nin = np.zeros((self.num_L, self.num_chi)) # debris going into top cell
+            D_in = 0
+            N_in  = np.zeros((self.num_L, self.num_chi), dtype=np.int64)
+            top_Nin = np.zeros((self.num_L, self.num_chi), dtype=np.int64) # debris going into top cell
             top_cell = self.cells[-1]
             for i in range(self.num_L):
                 for j in range(self.num_chi):
@@ -133,23 +137,29 @@ class NCell:
             if upper : N_in = top_Nin
 
             # iterate through cells, from top to bottom
-            for i in range(-1, len(self.cells), -1):
+            for i in range(-1, (-1)*(len(self.cells) + 1), -1):
                 curr_cell = self.cells[i]
                 change_N[i] += N_in
                 m_s = curr_cell.m_s
                 D_in, N_in, sat_coll, N_coll = curr_cell.step(D_in, dt)
-                change_N[i] -= N_in # loses debris decaying out
+                change_N[i] -= N_in # loses debris decaying outs
                 # simulate collisions
-                change_N = self.sim_colls(change_N, sat_coll, m_s, m_s, i)
+                self.sim_colls(change_N, int(sat_coll), m_s, m_s, i)
                 for j in range(self.num_L):
                     ave_L = 10**((self.logL_edges[j] + self.logL_edges[j+1])/2)
                     for k in range(self.num_chi):
                         ave_AM = 10**((self.chi_edges[k] + self.chi_edges[k+1])/2)
                         m_d = find_A(ave_L)/ave_AM
-                        change_N = self.sim_colls(change_N, N_coll[j,k], m_s, m_d, i)
+                        self.sim_colls(change_N, int(N_coll[j,k]), m_s, m_d, i)
                         
                 # add on debris lost to collisions
                 change_N[i] -= N_coll
+
+            # change N values
+            for i in range(len(self.cells)):
+                curr_cell = self.cells[i]
+                curr_cell.N_bins += change_N[i]
+                curr_cell.update_N_vals()
 
             # update time
             self.t.append(self.t[self.time] + dt)
@@ -169,8 +179,7 @@ class NCell:
 
         Keyword Parameter(s): None
 
-        Output(s):
-        nchange_N : the new change_N values (list of matrices)
+        Output(s): None
         '''
 
         v_rel = self.cells[index].v # collision velocity
@@ -184,14 +193,14 @@ class NCell:
             N_debris += calc_Ntot_coll(M, Lmin, Lmax)
         # calculate length distribution
         L_dist = randL_coll(N_debris, Lmin, Lmax)
-        L_binned = np.zeros(self.num_L) # those random values binned
+        L_binned = np.zeros(self.num_L, dtype=np.int64) # those random values binned
         for i in range(self.num_L):
             L_bot, L_top = 10**self.logL_edges[i], 10**self.logL_edges[i+1]
             L_binned[i] = len(L_dist[(L_dist > L_bot) & (L_dist < L_top)])
         for i in range(self.num_L): # iterate through each bin
             L_ave = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2)
             chi_dist = randX_coll(L_binned[i], chi_min, chi_max, L_ave) # get chi distribution for all debris
-            chi_binned = np.zeros(self.num_chi) # those random values binned
+            chi_binned = np.zeros(self.num_chi, dtype=np.int64) # those random values binned
             for j in range(self.num_chi):
                 chi_bot, chi_top = self.chi_edges[j], self.chi_edges[j+1]
                 chi_binned[j] = len(chi_dist[(chi_dist > chi_bot) & (chi_dist < chi_top)])
@@ -200,15 +209,13 @@ class NCell:
                 chi_ave = (self.chi_edges[i] + self.chi_edges[i+1])/2
                 v_dist = randv_coll(chi_binned[j], chi_ave) # get v_kick distribution for all debris
                 direction_dist = rand_direction(chi_binned[j]) # get random directions for v_kick for all debris
-                for k in len(v_dist): # iterate through the random velocity values
+                for k in range(len(v_dist)): # iterate through the random velocity values
                     v_loc, direction = 10**v_dist[k], direction_dist[:,k]
                     # calculate new orbital velocity
                     v2 = np.sqrt((v_orbit + v_loc*direction[0])**2 + (v_loc*direction[1])**2 + (v_loc*direction[2])**2)
                     alt_new = 1/(2/alt - v2/(G*Me)) # calculate new altitude with vis-viva equation
                     index_new = self.alt_to_index(alt_new) # get index that the debris goes to
                     change_N[index_new][i,j] += 1 # add the debris to the right location
-
-        return change_N
 
     def run_live_sim(self, dt=1, upper=True, dt_live=1, S=True, D=True, N=True):
         '''

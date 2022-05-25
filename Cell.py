@@ -56,7 +56,7 @@ class Cell:
         # lethat debris, and non-lethal debris over time
         self.S, self.D = [S_i], [D_i]
         self.N_bins = N_i
-        self.N_l, self.N_nl = [np.sum(N_i[N_i > 10])], [np.sum(N_i[N_i <= 10])]
+        self.N_l, self.N_nl = [], []
 
         # setup other variables
         self.C_l = [0] # lethal collisions
@@ -77,6 +77,7 @@ class Cell:
         self.chi_edges = chi_edges
         self.num_L = self.N_bins.shape[0]
         self.num_chi = self.N_bins.shape[1]
+        self.update_N_vals()
 
     def step(self, D_in, dt):
         '''
@@ -101,18 +102,18 @@ class Cell:
         S, D = self.S[-1], self.D[-1]
 
         # compute the number of collisions from each debris type
-        coll_S = np.zeros(self.N_bins.shape) # collisions with live satallites
+        coll_S = np.zeros(self.N_bins.shape, dtype=np.int64) # collisions with live satallites
         coll_SD = 0 # collisions between live and derelict satallites
-        coll_D = np.zeros(self.N_bins.shape) # collisions with derelict satallites
-        decay_N = np.zeros(self.N_bins.shape) # number of debris that decay
+        coll_D = np.zeros(self.N_bins.shape, dtype=np.int64) # collisions with derelict satallites
+        decay_N = np.zeros(self.N_bins.shape, dtype=np.int64) # number of debris that decay
         decay_D = 0 # number of derelicts that decay
         coll_DD = 0 # number of collisions between 
         lethal_N = np.full(self.N_bins.shape, False) # whether or not each bin has lethal collisions
 
         # handle debris events
-        for i in (self.num_L):
+        for i in range(self.num_L):
             ave_L = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2) # average L value for these bins
-            for j in (self.num_chi):
+            for j in range(self.num_chi):
                 ave_chi = (self.chi_edges[j] + self.chi_edges[j+1])/2
                 nS_col, nD_col, nN_decay = self.N_events(S, D, self.N_bins[i,j], ave_L, self.tau_N[i,j], dt)
                 if is_catastrophic(self.m_s, ave_L, ave_chi, self.v) : lethal_N[i,j] = True
@@ -168,14 +169,14 @@ class Cell:
             dSdt = n*sigma*v*S
         else: # collisions can be avoided
             dSdt = self.alpha*n*sigma*v*S
-        dDdt = n*sigma*v*D 
+        dDdt = n*sigma*v*D
         nS_col = dSdt*dt # convert rates to number of collisions
         nD_col = dDdt*dt
         # randomly decide if a fractional collision occurs
         nS_col = rand_round(nS_col)
         nD_col = rand_round(nD_col)
-        nN_decay = N/tau*dt # calculate decays
-        nN_decay = rand_round(nN_decay) # randomly decide if a fractional decay occurs
+        nN_decay_old = N/tau*dt # calculate decays
+        nN_decay = rand_round(nN_decay_old) # randomly decide if a fractional decay occurs
         return nS_col, nD_col, nN_decay
 
     def D_events(self, S, D, dt):
@@ -235,3 +236,23 @@ class Cell:
         sat_down_fail = rand_round(sat_down*(1-self.P))
 
         return sat_up, sat_down, sat_down_fail
+
+    def update_N_vals(self):
+        '''
+        updates N_l, N_nl values based on current N values
+
+        Parameter(s): None
+
+        Keyword Parameter(s): None
+
+        Output(s): None
+        '''
+    
+        new_Nl, new_Nnl = 0, 0
+        for i in range(self.num_L):
+            ave_L = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2) # average L value for these bins
+            if ave_L >= 10 : new_Nl += np.sum(self.N_bins[i, :])
+            else : new_Nnl += np.sum(self.N_bins[i, :])
+
+        self.N_l.append(new_Nl)
+        self.N_nl.append(new_Nnl)
