@@ -1,28 +1,36 @@
 # implementation of the NASA standard breakup model
 
 from scipy.special import erf, erfinv
+from scipy.stats import poisson
 import numpy as np
 
-def rand_round(num):
+def rand_poisson(ave, mx=np.inf):
     '''
-    randomly rounds a real number either up or down to the nearest integer
+    generates a random number from a poisson distribution (in the magnitude of the number), 
+    retrying if the number is larger than mx
 
     Parameter(s):
-    num : a real number
+    ave : expectation value of the Poisson distribution (can be negative)
 
-    Keyword Parameter(s): None
+    Keyword Parameter(s):
+    mx : maximum desired random value (must be positive)
 
     Output(s):
-    int_num : number rounded to an integer
+    num : random value from poisson distribution
     '''
 
-    if num == 0 : return num # nothing to do in this case
-    sign_fac = num/num # factor to account for the sign of the number
-    rand = np.random.uniform() # get random number between 0 and 1
-    if rand > abs(num - int(num)): # randomly round
-        return int(num)
-    else:
-        return int(num) + sign_fac
+    if ave == 0 : return ave # nothing to do in this case
+    sign_fac = ave/ave # factor to account for the sign of the number
+    first = True
+    num = 0
+    if abs(ave) > mx: 
+        if mx > 10: # for small values things are probably fine
+            print('WARNING: Time step may be too large')
+        return mx*sign_fac
+    while num > mx or first: # make sure the number isn't too large
+        if first : first = False
+        num = poisson.rvs(abs(ave))
+    return num*sign_fac
 
 def is_catastrophic(m_s, L, AM, v):
     '''

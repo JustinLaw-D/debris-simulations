@@ -173,10 +173,10 @@ class Cell:
         nS_col = dSdt*dt # convert rates to number of collisions
         nD_col = dDdt*dt
         # randomly decide if a fractional collision occurs
-        nS_col = rand_round(nS_col)
-        nD_col = rand_round(nD_col)
+        nS_col = rand_poisson(nS_col, mx=min(S, N))
+        nD_col = rand_poisson(nD_col, mx=min(D, N))
         nN_decay_old = N/tau*dt # calculate decays
-        nN_decay = rand_round(nN_decay_old) # randomly decide if a fractional decay occurs
+        nN_decay = rand_poisson(nN_decay_old, mx=N) # randomly decide if a fractional decay occurs
         return nS_col, nD_col, nN_decay
 
     def D_events(self, S, D, dt):
@@ -208,10 +208,10 @@ class Cell:
         nSD_col = dSDdt*dt # convert rates to number of collisions
         nDD_col = dDDdt*dt
         # randomly decide if a fractional collision occurs
-        nSD_col = rand_round(nSD_col)
-        nDD_col = rand_round(nDD_col)
+        nSD_col = rand_poisson(nSD_col, mx=min(S, D))
+        nDD_col = rand_poisson(nDD_col, mx=D/2)
         nD_decay = D/self.tau_D*dt # calculate decays
-        nD_decay = rand_round(nD_decay) # randomly decide if a fractional decay occurs
+        nD_decay = rand_poisson(nD_decay, mx=D) # randomly decide if a fractional decay occurs
         return nSD_col, nDD_col, nD_decay
 
     def S_events(self, S, dt):
@@ -231,9 +231,9 @@ class Cell:
         sat_down_fail : number of satallites that fail a de-orbit attempt in the time step
         '''
 
-        sat_up = rand_round(self.lam*dt)
-        sat_down = rand_round(S/self.del_t*dt)
-        sat_down_fail = rand_round(sat_down*(1-self.P))
+        sat_up = rand_poisson(self.lam*dt)
+        sat_down = rand_poisson(S/self.del_t*dt, mx=S)
+        sat_down_fail = rand_poisson(sat_down*(1-self.P), mx=sat_down)
 
         return sat_up, sat_down, sat_down_fail
 

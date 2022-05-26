@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from BreakupModel import *
 from copy import deepcopy
+import time
 
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
 Me = 5.97219e24 # mass of Earth (kg)
@@ -125,7 +126,7 @@ class NCell:
             change_N = [] # arrays changes in debris values
             for i in range(len(self.cells)):
                 change_N.append(np.zeros((self.num_L, self.num_chi),dtype=np.int64))
-            
+
             # get initial D_in, N_in values
             D_in = 0
             N_in  = np.zeros((self.num_L, self.num_chi), dtype=np.int64)
@@ -133,7 +134,7 @@ class NCell:
             top_cell = self.cells[-1]
             for i in range(self.num_L):
                 for j in range(self.num_chi):
-                    top_Nin[i,j] = rand_round((self.upper_N[i,j]/top_cell.tau_N[i,j])*dt)
+                    top_Nin[i,j] = rand_poisson((self.upper_N[i,j]/top_cell.tau_N[i,j])*dt, mx=self.upper_N[i,j])
             if upper : N_in = top_Nin
 
             # iterate through cells, from top to bottom
