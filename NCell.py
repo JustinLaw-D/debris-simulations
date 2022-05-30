@@ -122,6 +122,12 @@ class NCell:
         Output(s): None
         '''
 
+        top_Nin = np.zeros((self.num_L, self.num_chi), dtype=np.int64) # debris going into top cell
+        top_cell = self.cells[-1]
+        for i in range(self.num_L):
+            for j in range(self.num_chi):
+                top_Nin[i,j] = rand_poisson((self.upper_N[i,j]/top_cell.tau_N[i,j])*dt, mx=self.upper_N[i,j])
+
         while self.t[self.time] < T:
             change_N = [] # arrays changes in debris values
             for i in range(len(self.cells)):
@@ -130,11 +136,6 @@ class NCell:
             # get initial D_in, N_in values
             D_in = 0
             N_in  = np.zeros((self.num_L, self.num_chi), dtype=np.int64)
-            top_Nin = np.zeros((self.num_L, self.num_chi), dtype=np.int64) # debris going into top cell
-            top_cell = self.cells[-1]
-            for i in range(self.num_L):
-                for j in range(self.num_chi):
-                    top_Nin[i,j] = rand_poisson((self.upper_N[i,j]/top_cell.tau_N[i,j])*dt, mx=self.upper_N[i,j])
             if upper : N_in = top_Nin
 
             # iterate through cells, from top to bottom
@@ -145,13 +146,13 @@ class NCell:
                 D_in, N_in, sat_coll, N_coll = curr_cell.step(D_in, dt)
                 change_N[i] -= N_in # loses debris decaying outs
                 # simulate collisions
-                self.sim_colls(change_N, int(sat_coll), m_s, m_s, i)
+                self.sim_colls(change_N, sat_coll, m_s, m_s, i)
                 for j in range(self.num_L):
                     ave_L = 10**((self.logL_edges[j] + self.logL_edges[j+1])/2)
                     for k in range(self.num_chi):
                         ave_AM = 10**((self.chi_edges[k] + self.chi_edges[k+1])/2)
                         m_d = find_A(ave_L)/ave_AM
-                        self.sim_colls(change_N, int(N_coll[j,k]), m_s, m_d, i)
+                        self.sim_colls(change_N, N_coll[j,k], m_s, m_d, i)
                         
                 # add on debris lost to collisions
                 change_N[i] -= N_coll
@@ -183,6 +184,7 @@ class NCell:
         Output(s): None
         '''
 
+        if num == 0 : return # just skip everything if you can
         v_rel = self.cells[index].v # collision velocity
         v_orbit = self.cells[index].v_orbit # orbital velocity
         alt = self.alts[index] # altitude of the orbit

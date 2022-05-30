@@ -196,14 +196,13 @@ class Cell:
         nSD_col : number of collisions between a derelelict and live satallite in the time step
         nD_decay : number of derelicts that decay out of the shell in the time step
         '''
-        sigma = self.sigma/1e6 # convert to km^2
+        sigma = 4*self.sigma/1e6 # convert to km^2, and account for increased cross-section
         v = self.v*365.25*24*60*60 # convert to km/yr
         V = 4*np.pi*(6371 + self.alt)**2*self.dh # volume of the shell
         n = D/V # number density of the derelicts
 
         # rate of collisions between derelicts and satallites (live/derelict)
         dSDdt = n*sigma*v*S # collisions cannot be avoided
-        n /= 2 # avoid double counting
         dDDdt = n*sigma*v*D 
         nSD_col = dSDdt*dt # convert rates to number of collisions
         nDD_col = dDDdt*dt

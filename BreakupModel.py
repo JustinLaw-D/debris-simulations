@@ -20,7 +20,7 @@ def rand_poisson(ave, mx=np.inf):
     '''
 
     if ave == 0 : return ave # nothing to do in this case
-    sign_fac = ave/ave # factor to account for the sign of the number
+    sign_fac = round(ave/ave) # factor to account for the sign of the number
     first = True
     num = 0
     if abs(ave) > mx: 
