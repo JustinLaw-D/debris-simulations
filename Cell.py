@@ -2,6 +2,8 @@
 
 import numpy as np
 from BreakupModel import *
+G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
+Me = 5.97219e24 # mass of Earth (kg)
 
 class Cell:
     
@@ -52,8 +54,7 @@ class Cell:
         # setup initial values for tracking live satallites, derelict satallites,
         # lethat debris, and non-lethal debris over time
         self.S, self.D = [S_i], [D_i]
-        self.N_bins = N_i
-        self.N_l, self.N_nl = [], []
+        self.N_bins = [N_i]
 
         # setup other variables
         self.C_l = [0] # lethal collisions
@@ -67,14 +68,14 @@ class Cell:
         self.del_t = del_t
         self.sigma = sigma
         self.v = v
+        self.v_orbit = np.sqrt(G*Me/(alt*1000)) # orbital velocity in m/s
         self.alpha = alpha
         self.P = P
         self.logL_edges = logL_edges
         self.chi_edges = chi_edges
-        self.num_L = self.N_bins.shape[0]
-        self.num_chi = self.N_bins.shape[1]
-        self.update_N_vals()
-        self.lethal_N = np.full(self.N_bins.shape, False) # whether or not each bin has lethal collisions
+        self.num_L = self.N_bins[0].shape[0]
+        self.num_chi = self.N_bins[0].shape[1]
+        self.lethal_N = np.full(self.N_bins[0].shape, False) # whether or not each bin has lethal collisions
         self.update_lethal_N()
 
     def dxdt_cell(self, D_in):
@@ -99,23 +100,23 @@ class Cell:
         Note: Assumes that collisions with debris of L_cm < 10cm cannot be avoided
         '''
         
-        S, D = self.S[-1], self.D[-1]
+        S, D, N = self.S[-1], self.D[-1], self.N_bins[-1]
 
         # compute the rate of collisions from each debris type
-        dSdt = np.zeros(self.N_bins.shape, dtype=np.int64) # collisions with live satallites
+        dSdt = np.zeros(self.N.shape, dtype=np.int64) # collisions with live satallites
         dSDdt = 0 # collisions between live and derelict satallites
-        dDdt = np.zeros(self.N_bins.shape, dtype=np.int64) # collisions with derelict satallites
-        decay_N = np.zeros(self.N_bins.shape, dtype=np.int64) # rate of debris that decay
+        dDdt = np.zeros(self.N.shape, dtype=np.int64) # collisions with derelict satallites
+        decay_N = np.zeros(self.N.shape, dtype=np.int64) # rate of debris that decay
         decay_D = 0 # rate of derelicts that decay
         dDDdt = 0 # number of collisions between derelict satallites
-        lethal_N = np.full(self.N_bins.shape, False) # whether or not each bin has lethal collisions
+        lethal_N = np.full(self.N.shape, False) # whether or not each bin has lethal collisions
 
         # handle debris events
         for i in range(self.num_L):
             ave_L = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2) # average L value for these bins
             for j in range(self.num_chi):
                 ave_chi = (self.chi_edges[j] + self.chi_edges[j+1])/2
-                dSdt_loc, dDdt_loc, decay_N_loc = self.N_events(S, D, self.N_bins[i,j], ave_L, self.tau_N[i,j])
+                dSdt_loc, dDdt_loc, decay_N_loc = self.N_events(S, D, self.N[i,j], ave_L, self.tau_N[i,j])
                 if is_catastrophic(self.m_s, ave_L, ave_chi, self.v) : lethal_N[i,j] = True
                 dSdt[i,j] = dSdt_loc
                 dDdt[i,j] = dDdt_loc
@@ -194,26 +195,6 @@ class Cell:
         dDDdt = n*sigma*v*D 
         dDdt = D/self.tau_D # calculate decays
         return dSDdt, dDDdt, dDdt
-
-    def update_N_vals(self):
-        '''
-        updates N_l, N_nl values based on current N values
-
-        Parameter(s): None
-
-        Keyword Parameter(s): None
-
-        Output(s): None
-        '''
-    
-        new_Nl, new_Nnl = 0, 0
-        for i in range(self.num_L):
-            ave_L = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2) # average L value for these bins
-            if ave_L >= 10 : new_Nl += np.sum(self.N_bins[i, :])
-            else : new_Nnl += np.sum(self.N_bins[i, :])
-
-        self.N_l.append(new_Nl)
-        self.N_nl.append(new_Nnl)
 
     def update_lethal_N(self):
         '''

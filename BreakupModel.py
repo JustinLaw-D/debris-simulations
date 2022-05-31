@@ -113,6 +113,27 @@ def find_A(L):
     if L < 0.00167 : return 0.540424*(L**2)
     else : return 0.556945*(L**2.0047077)
 
+def L_cdf(L, L_min, L_max):
+    '''
+    calculates the cumulative distribution function for characteristic lengths
+    at length L, assuming the distribution is truncated at L_min and L_max
+
+    Parameter(s):
+    L : characteristic length (m)
+    L_min : minimum characteristic length to consider (m)
+    L_max : maximum characteristic length to consider (m)
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    P : value of CDF at L
+    '''
+
+    beta = -1.71
+    return (L_min**beta - L**beta)/(L_min**beta - L_max**beta)
+
+
+
 def randL_coll(num, L_min, L_max):
     '''
     generates num random characteristic lengths for debris from a collision
@@ -133,6 +154,123 @@ def randL_coll(num, L_min, L_max):
     P = np.random.uniform(size=num) # get random P values
     lam = np.log10(10**(beta*lam_min) - P*(10**(beta*lam_min) - 10**(beta*lam_max)))/beta
     return 10**lam
+
+def X_cdf(x, x_min, x_max, L):
+    '''
+    calculates the cumulative distribution function for log10(A/M) at value x
+    at length L, assuming the distribution is truncated at x_min and x_max
+
+    Parameter(s):
+    x : log10(A/M) (log10(m^2/kg))
+    x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
+    x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
+    L : characteristic length of the debris (m)
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    P : value of CDF at x, L
+    '''
+
+    if L >= 11/100 : return _X_cdf_11(x, x_min, x_max, L)
+    elif L <= 8/100 : return _X_cdf_8(x, x_min, x_max, L)
+    else:
+        lam_min, lam_max = np.log10(8/100), np.log10(11/100) # TODO: THIS IS TEMPORARY
+        P = (np.log10(L)-lam_min)/(lam_max-lam_min)
+        return P*_X_cdf_11(x, x_min, x_max, L) + (1-P)*_X_cdf_8(x, x_min, x_max, L)
+
+def _X_cdf_8(x, x_min, x_max, L):
+    '''
+    calculates the cumulative distribution function for log10(A/M) at value x
+    at length L<=8cm, assuming the distribution is truncated at x_min and x_max
+
+    Parameter(s):
+    x : log10(A/M) (log10(m^2/kg))
+    x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
+    x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
+    L : characteristic length of the debris (m)
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    P : value of CDF at x, L
+    '''
+    lam = np.log10(L)
+
+    # define functions for determining normal distribution parameters
+    def mu_soc(lambda_c):
+        if lambda_c <= -1.75 : return -0.3
+        elif lambda_c < -1.25 : return -0.3 - 1.4*(lambda_c + 1.75)
+        else : return -1
+
+    def sigma_soc(lambda_c):
+        if lambda_c <= -3.5 : return 0.2
+        else : return 0.2 + 0.1333*(lambda_c + 3.5)
+    
+    mu = mu_soc(lam) # calculate parameters
+    sigma = sigma_soc(lam)
+    C = 1/(erf((x_max-mu)/(np.sqrt(2)*sigma)) - erf((x_min-mu)/(np.sqrt(2)*sigma))) # normalization factor
+    # compute total distribution
+    return C*(erf((x-mu)/(np.sqrt(2)*sigma)) - erf((x_min-mu)/(np.sqrt(2)*sigma)))
+
+def _X_cdf_11(x, x_min, x_max, L):
+    '''
+    calculates the cumulative distribution function for log10(A/M) at value x
+    at length L>=11cm, assuming the distribution is truncated at x_min and x_max
+
+    Parameter(s):
+    x : log10(A/M) (log10(m^2/kg))
+    x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
+    x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
+    L : characteristic length of the debris (m)
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    P : value of CDF at x, L
+    '''
+    lam = np.log10(L)
+
+    # define functions for determining normal distribution parameters
+    def alpha_sc(lambda_c):
+            if lambda_c <= -1.95 : return 0
+            elif lambda_c < 0.55 : return 0.3 + 0.4*(lambda_c + 1.2)
+            else : return 1
+
+    def mu1_sc(lambda_c):
+        if lambda_c <= -1.1 : return -0.6
+        elif lambda_c < 0 : return -0.6 - 0.318*(lambda_c + 1.1)
+        else : return -0.95
+
+    def sigma1_sc(lambda_c):
+        if lambda_c <= -1.3 : return 0.1
+        elif lambda_c < -0.3 : return 0.1 + 0.2*(lambda_c + 1.3)
+        else : return 0.3
+
+    def mu2_sc(lambda_c):
+        if lambda_c <= -0.7 : return -1.2
+        elif lambda_c < -0.1 : return -1.2 - 1.333*(lambda_c + 0.7)
+        else : return -2
+
+    def sigma2_sc(lambda_c):
+        if lambda_c <= -0.5 : return 0.5
+        elif lambda_c < -0.3 : return 0.5 - (lambda_c + 0.5)
+        else : return 0.3
+    
+    mu1 = mu1_sc(lam) # calculate parameters
+    sigma1 = sigma1_sc(lam)
+    mu2 = mu2_sc(lam)
+    sigma2 = sigma2_sc(lam)
+    alpha = alpha_sc(lam)
+    # compute normalization factor
+    top = alpha*erf((x_max-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_max-mu2)/(np.sqrt(2)*sigma2))
+    bot = alpha*erf((x_min-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_min-mu2)/(np.sqrt(2)*sigma2))
+    C = 1/(top - bot)
+    # compute total distribution
+    fac_one = erf((x-mu1)/(np.sqrt(2)*sigma1)) - erf((x_min-mu1)/(np.sqrt(2)*sigma1))
+    fac_two = erf((x-mu2)/(np.sqrt(2)*sigma2)) - erf((x_min-mu2)/(np.sqrt(2)*sigma2))
+    return C*(alpha*fac_one + (1-alpha)*fac_two)
+    
 
 def randX_coll(num, x_min, x_max, L):
     '''
@@ -258,6 +396,49 @@ def _randX_coll_11(num, x_min, x_max, L):
         index = np.abs(P_table - P[i]).argmin() # find location of closest value on the table
         x[i] = x_table[index] # use this to find the corresponding x-value
     return x
+
+def v_cdf(v, x):
+    '''
+    evaluates cdf for log10(Delta v) values at given v and x
+
+    Parameter(s):
+    v : log10(delta v) value to evaluate at (log10(m/s))
+    x : log10(A/M) value of the debris (log10(m^2/kg))
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    P : value of the CDF at v, x
+    '''
+
+    mu = 0.9*x + 2.9 # calculate normal distribution parameters
+    sigma_fac = 0.4*np.sqrt(2)
+    C = 1/2 # calculate normalization factor
+    # calculate CDF value
+    return C*(erf((v-mu)/sigma_fac) + 1)
+
+def vprime_cdf(V, v0, x):
+    '''
+    evaluates cdf for the post-collision speed V, given a pre-collision
+    orbital speed v0 and x
+
+    evaluates cdf for log10(Delta v) values at given v and x
+
+    Parameter(s):
+    V : post-collison speed to evaluate at (m/s)
+    v0 : pre-collision orbital speed (m/s)
+    x : log10(A/M) value of the debris (log10(m^2/kg))
+
+    Keyword Parameter(s): None
+
+    Output(s):
+    P : value of the CDF at V
+
+    Note: averages over all directions.
+    '''
+    del_v = np.sqrt(V**2-v0**2)
+    return v_cdf(np.log10(del_v), x)
+
 
 def randv_coll(num, x):
     '''

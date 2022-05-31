@@ -5,7 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from BreakupModel import *
 from copy import deepcopy
-import time
 
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
 Me = 5.97219e24 # mass of Earth (kg)
@@ -80,6 +79,7 @@ class NCell:
         # generate bins for log10(L), chi
         self.logL_edges = np.linspace(np.log10(L_min), np.log10(L_max), num=num_L+1)
         self.chi_edges = np.linspace(chi_min, chi_max, num=num_chi+1)
+        self.probability_tables = list() # list of probability tables for collisions in each bin
 
         for i in range(0, S.size):
             # compute atmospheric drag lifetime for satallites in the shell
@@ -107,6 +107,50 @@ class NCell:
                         tau_N, del_t=del_t[i], sigma=sigma[i], m_s=m_s[i], v=v[i], alpha=alpha[i], P=P[i])
             self.cells.append(cell)
             if i == S.size - 1: self.upper_N = deepcopy(N_initial) # take the debris field above to be initial debris of top
+
+        # compute probability tables
+        for i in range(S.size):
+            curr_prob = np.zeros((S.size, self.num_L, self.num_chi))
+            self.fill_prob_table(curr_prob, i)
+            self.probability_tables.append(curr_prob)
+
+    def fill_prob_table(self, curr_prob, cell_index):
+        '''
+        calculates probability table for given cell
+
+        Input(s):
+        curr_prob : current probability table (3-d array)
+        cell_index : index of the current cell
+
+        Keyword Input(s): None
+
+        Output(s): None
+        '''
+
+        leftovers = 0
+        v0 = self.cells[cell_index].v_orbit # orbital velocity in m/s
+        a = self.cells[cell_index].# current orbital 
+        L_min, L_max = 10**self.logL_edges[0], 10**self.logL_edges[-1]
+        chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1]
+        for i in range(len(self.cells)): # iterate through cells
+            curr_cell = self.cells[i]
+            v_min = G*Me*(2/(curr_cell.alt*1000) + )
+            v_max = np.sqrt(G*Me/((curr_cell.alt + curr_cell.dh)*1000))
+            for j in range(self.num_L): # iterate through bins
+                bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
+                ave_L = 10**((bin_bot_L+bin_top_L)/2)
+                curr_prob[:, j, :] = L_cdf(10**bin_top_L, L_min, L_max) - L_cdf(10**bin_bot_L, L_min, L_max) # probability of L being in this bin
+                for k in range(self.num_chi):
+                    bin_bot_chi, bin_top_chi = self.chi_edges[j], self.chi_edges[j+1]
+                    ave_chi = (bin_bot_L+bin_top_L)/2
+                    curr_prob[:, j, k] *= X_cdf(bin_top_chi, chi_min, chi_max, ave_L) - X_cdf(bin_bot_chi, chi_min, chi_max, ave_L)
+                    if i == len(self.cells) - 1:
+                        leftovers += curr_prob[i,j,k]*(vprime_cdf(np.inf, v0, ave_chi) - vprime_cdf(max(v_max, v0), v0, ave_chi))
+                    print(vprime_cdf(max(v_max, v0), v0, ave_chi) - vprime_cdf(max(v_min, v0), v0, ave_chi))
+                    curr_prob[i, j, k] *= vprime_cdf(max(v_max, v0), v0, ave_chi) - vprime_cdf(max(v_min, v0), v0, ave_chi)
+                    print(curr_prob[i,j,k])
+
+        print(curr_prob)
 
     def run_sim(self, T, dt=1, upper=True):
         '''
