@@ -68,7 +68,7 @@ class Cell:
         self.del_t = del_t
         self.sigma = sigma
         self.v = v
-        self.v_orbit = np.sqrt(G*Me/(alt*1000)) # orbital velocity in m/s
+        self.v_orbit = np.sqrt(G*Me/(alt*1000))/1000 # orbital velocity in km/s
         self.alpha = alpha
         self.P = P
         self.logL_edges = logL_edges
@@ -103,21 +103,18 @@ class Cell:
         S, D, N = self.S[-1], self.D[-1], self.N_bins[-1]
 
         # compute the rate of collisions from each debris type
-        dSdt = np.zeros(self.N.shape, dtype=np.int64) # collisions with live satallites
+        dSdt = np.zeros(N.shape) # collisions with live satallites
         dSDdt = 0 # collisions between live and derelict satallites
-        dDdt = np.zeros(self.N.shape, dtype=np.int64) # collisions with derelict satallites
-        decay_N = np.zeros(self.N.shape, dtype=np.int64) # rate of debris that decay
+        dDdt = np.zeros(N.shape) # collisions with derelict satallites
+        decay_N = np.zeros(N.shape) # rate of debris that decay
         decay_D = 0 # rate of derelicts that decay
         dDDdt = 0 # number of collisions between derelict satallites
-        lethal_N = np.full(self.N.shape, False) # whether or not each bin has lethal collisions
 
         # handle debris events
         for i in range(self.num_L):
             ave_L = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2) # average L value for these bins
             for j in range(self.num_chi):
-                ave_chi = (self.chi_edges[j] + self.chi_edges[j+1])/2
-                dSdt_loc, dDdt_loc, decay_N_loc = self.N_events(S, D, self.N[i,j], ave_L, self.tau_N[i,j])
-                if is_catastrophic(self.m_s, ave_L, ave_chi, self.v) : lethal_N[i,j] = True
+                dSdt_loc, dDdt_loc, decay_N_loc = self.N_events(S, D, N[i,j], ave_L, self.tau_N[i,j])
                 dSdt[i,j] = dSdt_loc
                 dDdt[i,j] = dDdt_loc
                 decay_N[i,j] = decay_N_loc
@@ -131,9 +128,9 @@ class Cell:
         # sum everything up
         D_dt = dSDdt + dDDdt
         C_dt = dSdt + dDdt
-        dSdt = sat_up - sat_down - np.sum(dSdt) - dSDdt
-        dDdt = sat_down_fail - decay_D + D_in - np.sum(dDdt[lethal_N == False]) - dSDdt - 2*dDDdt
-        return dSdt, dDdt, decay_D, decay_N, D_dt, C_dt
+        dSdt_val = sat_up - sat_down - np.sum(dSdt) - dSDdt
+        dDdt_val = sat_down_fail - decay_D + D_in + np.sum(dSdt[self.lethal_N == False]) - np.sum(dDdt[self.lethal_N == True]) - dSDdt - 2*dDDdt
+        return dSdt_val, dDdt_val, decay_D, decay_N, D_dt, C_dt
 
     def N_events(self, S, D, N, ave_L, tau):
         '''
@@ -194,7 +191,8 @@ class Cell:
         dSDdt = n*sigma*v*S # collisions cannot be avoided
         dDDdt = n*sigma*v*D 
         dDdt = D/self.tau_D # calculate decays
-        return dSDdt, dDDdt, dDdt
+        return 0, 0, dDdt
+        #return dSDdt, dDDdt, dDdt
 
     def update_lethal_N(self):
         '''

@@ -85,7 +85,7 @@ class NCell:
             # compute atmospheric drag lifetime for satallites in the shell
             tau_D = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_sat[i])
             # calculate decay paremeters for debris, initial debris values
-            N_initial, tau_N = np.zeros((num_L, num_chi), dtype=np.int64), np.zeros((num_L, num_chi))
+            N_initial, tau_N = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi))
             # generate initial distributions
             lethal_L = np.log10(randL_coll(N_l[i], 1e-1, L_max))
             nlethal_L = np.log10(randL_coll(delta[i]*N_l[i], L_min, 1e-1))
@@ -127,15 +127,17 @@ class NCell:
         Output(s): None
         '''
 
-        leftovers = 0
-        v0 = self.cells[cell_index].v_orbit # orbital velocity in m/s
-        a = self.cells[cell_index].# current orbital 
+        leftovers = 0 # probability of exiting the system
+        v0 = self.cells[cell_index].v_orbit*1000 # orbital velocity in m/s
+        r = self.cells[cell_index].alt # in km
         L_min, L_max = 10**self.logL_edges[0], 10**self.logL_edges[-1]
         chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1]
         for i in range(len(self.cells)): # iterate through cells
             curr_cell = self.cells[i]
-            v_min = G*Me*(2/(curr_cell.alt*1000) + )
-            v_max = np.sqrt(G*Me/((curr_cell.alt + curr_cell.dh)*1000))
+            alt_min = curr_cell.alt - curr_cell.dh/2 # in km
+            alt_max = curr_cell.alt + curr_cell.dh/2
+            v_min2 = G*Me*(2/(r*1000) - 1/(alt_min*1000)) # minimum velocity squared (m/s)
+            v_max2 = G*Me*(2/(r*1000) - 1/(alt_max*1000)) # maximum velocity squared (m/s)
             for j in range(self.num_L): # iterate through bins
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
                 ave_L = 10**((bin_bot_L+bin_top_L)/2)
@@ -144,13 +146,17 @@ class NCell:
                     bin_bot_chi, bin_top_chi = self.chi_edges[j], self.chi_edges[j+1]
                     ave_chi = (bin_bot_L+bin_top_L)/2
                     curr_prob[:, j, k] *= X_cdf(bin_top_chi, chi_min, chi_max, ave_L) - X_cdf(bin_bot_chi, chi_min, chi_max, ave_L)
-                    if i == len(self.cells) - 1:
-                        leftovers += curr_prob[i,j,k]*(vprime_cdf(np.inf, v0, ave_chi) - vprime_cdf(max(v_max, v0), v0, ave_chi))
-                    print(vprime_cdf(max(v_max, v0), v0, ave_chi) - vprime_cdf(max(v_min, v0), v0, ave_chi))
-                    curr_prob[i, j, k] *= vprime_cdf(max(v_max, v0), v0, ave_chi) - vprime_cdf(max(v_min, v0), v0, ave_chi)
-                    print(curr_prob[i,j,k])
+                    if v_min2 < 0 and v_max2 < 0 : curr_prob[i,j,k] = 0
+                    elif v_min2 < 0 : curr_prob[i,j,k] *= vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi)
+                    else : curr_prob[i,j,k] *= vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi) - vprime_cdf(max(np.sqrt(v_min2), v0), v0, ave_chi)
+                    if i == len(self.cells) - 1 : 
+                        leftovers += curr_prob[i,j,k] * (vprime_cdf(np.inf, v0, ave_chi) - vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi))
 
-        print(curr_prob)
+        total = np.sum(curr_prob) + leftovers
+        for i in range(len(self.cells)):
+            for j in range(self.num_L):
+                for k in range(self.num_chi):
+                    curr_prob[i,j,k] /= total
 
     def run_sim(self, T, dt=1, upper=True):
         '''
@@ -166,59 +172,68 @@ class NCell:
         Output(s): None
         '''
 
-        top_Nin = np.zeros((self.num_L, self.num_chi), dtype=np.int64) # debris going into top cell
         top_cell = self.cells[-1]
-        for i in range(self.num_L):
-            for j in range(self.num_chi):
-                top_Nin[i,j] = rand_poisson((self.upper_N[i,j]/top_cell.tau_N[i,j])*dt, mx=self.upper_N[i,j])
+        top_Nin = self.upper_N/top_cell.tau_N # debris going into top cell
 
         while self.t[self.time] < T:
-            change_N = [] # arrays changes in debris values
+            dSdt = [] # array of changes in satallite values
+            dDdt = [] # array of changes in derelict values
+            dNdt = [] # array of changes in debris values
+            sat_coll = []
+            N_coll = [] # array of collision values
             for i in range(len(self.cells)):
-                change_N.append(np.zeros((self.num_L, self.num_chi),dtype=np.int64))
+                dSdt.append(0)
+                dDdt.append(0)
+                dNdt.append(np.zeros((self.num_L, self.num_chi)))
+                sat_coll.append(0)
+                N_coll.append(np.zeros((self.num_L, self.num_chi)))
 
             # get initial D_in, N_in values
             D_in = 0
-            N_in  = np.zeros((self.num_L, self.num_chi), dtype=np.int64)
+            N_in  = np.zeros((self.num_L, self.num_chi))
             if upper : N_in = top_Nin
 
             # iterate through cells, from top to bottom
             for i in range(-1, (-1)*(len(self.cells) + 1), -1):
                 curr_cell = self.cells[i]
-                change_N[i] += N_in
+                dNdt[i] += N_in
                 m_s = curr_cell.m_s
-                D_in, N_in, sat_coll, N_coll = curr_cell.step(D_in, dt)
-                change_N[i] -= N_in # loses debris decaying outs
+                dSdt[i], dDdt[i], D_in, N_in, sat_coll[i], N_coll[i] = curr_cell.dxdt_cell(D_in)
+                dNdt[i] -= N_in # loses debris decaying outs
                 # simulate collisions
-                self.sim_colls(change_N, sat_coll, m_s, m_s, i)
+                self.sim_colls(dNdt, sat_coll[i], m_s, m_s, i)
                 for j in range(self.num_L):
                     ave_L = 10**((self.logL_edges[j] + self.logL_edges[j+1])/2)
                     for k in range(self.num_chi):
                         ave_AM = 10**((self.chi_edges[k] + self.chi_edges[k+1])/2)
                         m_d = find_A(ave_L)/ave_AM
-                        self.sim_colls(change_N, N_coll[j,k], m_s, m_d, i)
+                        self.sim_colls(dNdt, N_coll[i][j,k], m_s, m_d, i)
                         
                 # add on debris lost to collisions
-                change_N[i] -= N_coll
+                dNdt[i] -= N_coll[i]
 
-            # change N values
+            # update values
             for i in range(len(self.cells)):
                 curr_cell = self.cells[i]
-                curr_cell.N_bins += change_N[i]
-                curr_cell.update_N_vals()
+                lethal_table = curr_cell.lethal_N
+                curr_cell.S.append(curr_cell.S[self.time] + dSdt[i]*dt)
+                curr_cell.D.append(curr_cell.D[self.time] + dDdt[i]*dt)
+                curr_cell.N_bins.append(curr_cell.N_bins[self.time] + dNdt[i]*dt)
+                curr_cell.C_l.append(curr_cell.C_l[self.time] + (sat_coll[i] + np.sum(N_coll[i][lethal_table==True]))*dt)
+                curr_cell.C_l.append(curr_cell.C_l[self.time] + np.sum(N_coll[i][lethal_table==False])*dt)
 
             # update time
             self.t.append(self.t[self.time] + dt)
             self.time +=1
 
-    def sim_colls(self, change_N, num, m_1, m_2, index):
+    def sim_colls(self, dNdt, rate, m_1, m_2, index):
         '''
-        updates change_N by running num collisions between two objects of mass m_1, m_2 in
+        updates dNdt by distributing a rate of collisions between two objects of mass m_1, m_2 in
         the index'th cell
         
         Parameter(s):
-        change_N : current change_N values (list of matrices)
-        num : number of collisions to simulate
+        dNdt : current dNdt values (list of matrices, 1/yr)
+        rate : rate of collisions to simulate (1/yr)
         m_1 : mass of the first object (kg)
         m_2 : mass of the second object (kg)
         index : index of the cell the collision occurs in
@@ -228,41 +243,14 @@ class NCell:
         Output(s): None
         '''
 
-        if num == 0 : return # just skip everything if you can
-        v_rel = self.cells[index].v # collision velocity
-        v_orbit = self.cells[index].v_orbit # orbital velocity
-        alt = self.alts[index] # altitude of the orbit
+        if rate == 0 : return # just skip everything if you can
+        v_rel = self.cells[index].v # collision velocity (km/s)
         M = calc_M(m_1, m_2, v_rel) # M factor
         Lmin, Lmax = 10**self.logL_edges[0], 10**self.logL_edges[-1] # min and max characteristic lengths
-        chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1] # min and max chi values
-        N_debris = 0 # total number of debris
-        for i in range(num):
-            N_debris += calc_Ntot_coll(M, Lmin, Lmax)
-        # calculate length distribution
-        L_dist = randL_coll(N_debris, Lmin, Lmax)
-        L_binned = np.zeros(self.num_L, dtype=np.int64) # those random values binned
-        for i in range(self.num_L):
-            L_bot, L_top = 10**self.logL_edges[i], 10**self.logL_edges[i+1]
-            L_binned[i] = len(L_dist[(L_dist > L_bot) & (L_dist < L_top)])
-        for i in range(self.num_L): # iterate through each bin
-            L_ave = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2)
-            chi_dist = randX_coll(L_binned[i], chi_min, chi_max, L_ave) # get chi distribution for all debris
-            chi_binned = np.zeros(self.num_chi, dtype=np.int64) # those random values binned
-            for j in range(self.num_chi):
-                chi_bot, chi_top = self.chi_edges[j], self.chi_edges[j+1]
-                chi_binned[j] = len(chi_dist[(chi_dist > chi_bot) & (chi_dist < chi_top)])
-            # calculate velocity distribution, and  update values
-            for j in range(self.num_chi):
-                chi_ave = (self.chi_edges[i] + self.chi_edges[i+1])/2
-                v_dist = randv_coll(chi_binned[j], chi_ave) # get v_kick distribution for all debris
-                direction_dist = rand_direction(chi_binned[j]) # get random directions for v_kick for all debris
-                for k in range(len(v_dist)): # iterate through the random velocity values
-                    v_loc, direction = 10**v_dist[k], direction_dist[:,k]
-                    # calculate new orbital velocity
-                    v2 = np.sqrt((v_orbit + v_loc*direction[0])**2 + (v_loc*direction[1])**2 + (v_loc*direction[2])**2)
-                    alt_new = 1/(2/alt - v2/(G*Me)) # calculate new altitude with vis-viva equation
-                    index_new = self.alt_to_index(alt_new) # get index that the debris goes to
-                    change_N[index_new][i,j] += 1 # add the debris to the right location
+        N_debris = calc_Ntot_coll(M, Lmin, Lmax)*rate # total rate of debris creation
+        prob_table = self.probability_tables[index] # get right probability table
+        for i in range(len(self.cells)): # iterate through cells to send debris to
+            dNdt[i] += N_debris*prob_table[i, :, :]
 
     def run_live_sim(self, dt=1, upper=True, dt_live=1, S=True, D=True, N=True):
         '''
@@ -428,41 +416,10 @@ class NCell:
 
         to_return = []
         for cell in self.cells:
-            to_return.append(np.array(cell.N_l) + np.array(cell.N_nl))
-        return to_return
-    
-    def get_Nl(self):
-        '''
-        returns arrays for number of lethal debris in each shell
-
-        Parameter(s): None
-
-        Keyword Parameter(s): None
-
-        Returns:
-        list of array of N_l values for each cell, in order of ascending altitude
-        '''
-
-        to_return = []
-        for cell in self.cells:
-            to_return.append(cell.N_l)
-        return to_return
-
-    def get_Nnl(self):
-        '''
-        returns arrays for number of non-lethal debris in each shell
-
-        Parameter(s): None
-
-        Keyword Parameter(s): None
-
-        Returns:
-        list of array of N_nl values for each cell, in order of ascending altitude
-        '''
-
-        to_return = []
-        for cell in self.cells:
-            to_return.append(cell.N_nl)
+            N = []
+            for i in range(len(cell.N_bins)):
+                N.append(np.sum(cell.N_bins[i]))
+            to_return.append(np.array(N))
         return to_return
 
     def get_C(self):

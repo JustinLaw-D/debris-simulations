@@ -62,7 +62,7 @@ def calc_M(m_s, m_d, v):
     Parameter(s):
     m_s : satellite mass (kg)
     m_d : mass of the debris (kg)
-    v : collision velocity (m/s)
+    v : collision velocity (km/s)
 
     Keyword parameter(s): None
 
@@ -71,10 +71,10 @@ def calc_M(m_s, m_d, v):
     cat : whether or not the collision was catestrophic (boolean)
     '''
 
-    E_p = (0.5*m_d*(v**2)/m_s)/1000 # E_p in J/g
+    E_p = (0.5*m_d*((v*1000)**2)/m_s)/1000 # E_p in J/g
 
     if E_p >= 40 : return m_s + m_d # catestrophic collision
-    else : return m_d*(v/1000) # non-catestrophic collision
+    else : return m_d*v # non-catestrophic collision
 
 def calc_Ntot_coll(M, Lmin, Lmax):
     '''
@@ -89,13 +89,13 @@ def calc_Ntot_coll(M, Lmin, Lmax):
     Keyword Parameter(s): None
 
     Output(s):
-    N : total number of fragments of size > Lmin
+    N : total number of fragments of Lmax > size > Lmin
 
     Notes:
     Model output is a continuous value, and is simply truncated
     '''
 
-    return int(0.1*(M**0.75)*(Lmin**(-1.71)) - 0.1*(M**0.75)*(Lmax**(-1.71)))
+    return 0.1*(M**0.75)*(Lmin**(-1.71)) - 0.1*(M**0.75)*(Lmax**(-1.71))
 
 def find_A(L):
     '''
