@@ -70,7 +70,7 @@ class Cell:
         self.del_t = del_t
         self.sigma = sigma
         self.v = v
-        self.v_orbit = np.sqrt(G*Me/self.alt) # orbital speed (on average)
+        self.v_orbit = np.sqrt(G*Me/(self.alt*1000))/1000 # orbital speed (on average, km/s)
         self.alpha = alpha
         self.P = P
         self.logL_edges = logL_edges

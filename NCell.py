@@ -185,9 +185,9 @@ class NCell:
         '''
 
         if num == 0 : return # just skip everything if you can
-        v_rel = self.cells[index].v # collision velocity
-        v_orbit = self.cells[index].v_orbit # orbital velocity
-        alt = self.alts[index] # altitude of the orbit
+        v_rel = self.cells[index].v # collision velocity (km/s)
+        v_orbit = self.cells[index].v_orbit # orbital velocity (km/s)
+        alt = self.alts[index] # altitude of the orbit (km)
         M = calc_M(m_1, m_2, v_rel) # M factor
         Lmin, Lmax = 10**self.logL_edges[0], 10**self.logL_edges[-1] # min and max characteristic lengths
         chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1] # min and max chi values
@@ -213,10 +213,10 @@ class NCell:
                 v_dist = randv_coll(chi_binned[j], chi_ave) # get v_kick distribution for all debris
                 direction_dist = rand_direction(chi_binned[j]) # get random directions for v_kick for all debris
                 for k in range(len(v_dist)): # iterate through the random velocity values
-                    v_loc, direction = 10**v_dist[k], direction_dist[:,k]
-                    # calculate new orbital velocity
-                    v2 = np.sqrt((v_orbit + v_loc*direction[0])**2 + (v_loc*direction[1])**2 + (v_loc*direction[2])**2)
-                    alt_new = 1/(2/alt - v2/(G*Me)) # calculate new altitude with vis-viva equation
+                    v_loc, direction = 10**v_dist[k], direction_dist[:,k] # v_loc in m/s
+                    # calculate new orbital velocity (m/s)
+                    v2 = np.sqrt((v_orbit*1000 + v_loc*direction[0])**2 + (v_loc*direction[1])**2 + (v_loc*direction[2])**2)
+                    alt_new = 1/(2/(alt*1000) - v2/(G*Me))/1000 # calculate new altitude with vis-viva equation (in km)
                     index_new = self.alt_to_index(alt_new) # get index that the debris goes to
                     change_N[index_new][i,j] += 1 # add the debris to the right location
 
