@@ -148,9 +148,9 @@ class Cell:
         Keyword Parameter(s): None
         
         Output(s):
-        dSdt : rate of collisions between debris and live satellites
-        dDdt : rate of collisions between debris and derelict satellites
-        dNdt : rate of debris that decay out of the shell in the time step
+        dSdt : rate of collisions between debris and live satellites (1/yr)
+        dDdt : rate of collisions between debris and derelict satellites (1/yr)
+        dNdt : rate of debris that decay out of the shell in the time step (1/yr)
         '''
         sigma = self.sigma/1e6 # convert to km^2
         v = self.v*365.25*24*60*60 # convert to km/yr
@@ -191,8 +191,7 @@ class Cell:
         dSDdt = n*sigma*v*S # collisions cannot be avoided
         dDDdt = n*sigma*v*D 
         dDdt = D/self.tau_D # calculate decays
-        return 0, 0, dDdt
-        #return dSDdt, dDDdt, dDdt
+        return dSDdt, dDDdt, dDdt
 
     def update_lethal_N(self):
         '''
@@ -209,4 +208,4 @@ class Cell:
             ave_L = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2) # average L value for these bins
             for j in range(self.num_chi):
                 ave_chi = (self.chi_edges[j] + self.chi_edges[j+1])/2
-                self.lethal_N[i,j] = is_catastrophic(self.m_s, ave_L, ave_chi, self.v)
+                self.lethal_N[i,j] = is_catastrophic(self.m_s, ave_L, 10**ave_chi, self.v)

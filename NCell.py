@@ -146,11 +146,11 @@ class NCell:
                     bin_bot_chi, bin_top_chi = self.chi_edges[j], self.chi_edges[j+1]
                     ave_chi = (bin_bot_L+bin_top_L)/2
                     curr_prob[:, j, k] *= X_cdf(bin_top_chi, chi_min, chi_max, ave_L) - X_cdf(bin_bot_chi, chi_min, chi_max, ave_L)
+                    if i == len(self.cells) - 1 : 
+                        leftovers += curr_prob[i,j,k] * (vprime_cdf(np.inf, v0, ave_chi) - vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi))
                     if v_min2 < 0 and v_max2 < 0 : curr_prob[i,j,k] = 0
                     elif v_min2 < 0 : curr_prob[i,j,k] *= vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi)
                     else : curr_prob[i,j,k] *= vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi) - vprime_cdf(max(np.sqrt(v_min2), v0), v0, ave_chi)
-                    if i == len(self.cells) - 1 : 
-                        leftovers += curr_prob[i,j,k] * (vprime_cdf(np.inf, v0, ave_chi) - vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi))
 
         total = np.sum(curr_prob) + leftovers
         for i in range(len(self.cells)):
@@ -216,11 +216,13 @@ class NCell:
             for i in range(len(self.cells)):
                 curr_cell = self.cells[i]
                 lethal_table = curr_cell.lethal_N
+                if self.t[self.time] < 1:
+                    print(dSdt[i], dDdt[i], dNdt[i])
                 curr_cell.S.append(curr_cell.S[self.time] + dSdt[i]*dt)
                 curr_cell.D.append(curr_cell.D[self.time] + dDdt[i]*dt)
                 curr_cell.N_bins.append(curr_cell.N_bins[self.time] + dNdt[i]*dt)
                 curr_cell.C_l.append(curr_cell.C_l[self.time] + (sat_coll[i] + np.sum(N_coll[i][lethal_table==True]))*dt)
-                curr_cell.C_l.append(curr_cell.C_l[self.time] + np.sum(N_coll[i][lethal_table==False])*dt)
+                curr_cell.C_nl.append(curr_cell.C_nl[self.time] + np.sum(N_coll[i][lethal_table==False])*dt)
 
             # update time
             self.t.append(self.t[self.time] + dt)

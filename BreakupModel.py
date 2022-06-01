@@ -90,9 +90,6 @@ def calc_Ntot_coll(M, Lmin, Lmax):
 
     Output(s):
     N : total number of fragments of Lmax > size > Lmin
-
-    Notes:
-    Model output is a continuous value, and is simply truncated
     '''
 
     return 0.1*(M**0.75)*(Lmin**(-1.71)) - 0.1*(M**0.75)*(Lmax**(-1.71))
@@ -175,7 +172,7 @@ def X_cdf(x, x_min, x_max, L):
     if L >= 11/100 : return _X_cdf_11(x, x_min, x_max, L)
     elif L <= 8/100 : return _X_cdf_8(x, x_min, x_max, L)
     else:
-        lam_min, lam_max = np.log10(8/100), np.log10(11/100) # TODO: THIS IS TEMPORARY
+        lam_min, lam_max = np.log10(8/100), np.log10(11/100)
         P = (np.log10(L)-lam_min)/(lam_max-lam_min)
         return P*_X_cdf_11(x, x_min, x_max, L) + (1-P)*_X_cdf_8(x, x_min, x_max, L)
 
