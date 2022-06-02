@@ -4,6 +4,7 @@ import numpy as np
 from BreakupModel import *
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
 Me = 5.97219e24 # mass of Earth (kg)
+Re = 6371 # radius of Earth (km)
 
 class Cell:
     
@@ -68,7 +69,7 @@ class Cell:
         self.del_t = del_t
         self.sigma = sigma
         self.v = v
-        self.v_orbit = np.sqrt(G*Me/(alt*1000))/1000 # orbital velocity in km/s
+        self.v_orbit = np.sqrt(G*Me/((Re + alt)*1000))/1000 # orbital velocity in km/s
         self.alpha = alpha
         self.P = P
         self.logL_edges = logL_edges
@@ -78,13 +79,14 @@ class Cell:
         self.lethal_N = np.full(self.N_bins[0].shape, False) # whether or not each bin has lethal collisions
         self.update_lethal_N()
 
-    def dxdt_cell(self, D_in):
+    def dxdt_cell(self, time, D_in):
         '''
         calculates the rate of collisions and decays from each debris bin, the rate
         of decaying derelicts, the rate of launches/deorbits of satallites, and the
-        rate of creation of derelicts. also updates collision totals in the cell
+        rate of creation of derelicts at the given time
 
         Parameter(s):
+        time : index of the values to use
         D_in : rate of derelict satallites entering the cell from above (yr^(-1))
 
         Keyword Parameter(s): None
@@ -97,10 +99,11 @@ class Cell:
         D_dt : rate of collisions between satallites (yr^(-1))
         C_dt : matrix with the rate of collisions from each bin (yr^(-1))
 
-        Note: Assumes that collisions with debris of L_cm < 10cm cannot be avoided
+        Note: Assumes that collisions with debris of L_cm < 10cm cannot be avoided, and
+        that the given time input is valid
         '''
         
-        S, D, N = self.S[-1], self.D[-1], self.N_bins[-1]
+        S, D, N = self.S[time], self.D[time], self.N_bins[time]
 
         # compute the rate of collisions from each debris type
         dSdt = np.zeros(N.shape) # collisions with live satallites

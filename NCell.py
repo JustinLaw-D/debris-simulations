@@ -7,6 +7,7 @@ from BreakupModel import *
 from copy import deepcopy
 
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
+Re = 6371 # radius of Earth (km)
 Me = 5.97219e24 # mass of Earth (kg)
 
 class NCell:
@@ -127,7 +128,6 @@ class NCell:
         Output(s): None
         '''
 
-        leftovers = 0 # probability of exiting the system
         v0 = self.cells[cell_index].v_orbit*1000 # orbital velocity in m/s
         r = self.cells[cell_index].alt # in km
         L_min, L_max = 10**self.logL_edges[0], 10**self.logL_edges[-1]
@@ -136,31 +136,92 @@ class NCell:
             curr_cell = self.cells[i]
             alt_min = curr_cell.alt - curr_cell.dh/2 # in km
             alt_max = curr_cell.alt + curr_cell.dh/2
-            v_min2 = G*Me*(2/(r*1000) - 1/(alt_min*1000)) # minimum velocity squared (m/s)
-            v_max2 = G*Me*(2/(r*1000) - 1/(alt_max*1000)) # maximum velocity squared (m/s)
+            v_min2 = G*Me*(2/((Re + r)*1000) - 1/((Re + alt_min)*1000)) # minimum velocity squared (m/s)
+            v_max2 = G*Me*(2/((Re + r)*1000) - 1/((Re + alt_max)*1000)) # maximum velocity squared (m/s)
             for j in range(self.num_L): # iterate through bins
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
                 ave_L = 10**((bin_bot_L+bin_top_L)/2)
                 curr_prob[:, j, :] = L_cdf(10**bin_top_L, L_min, L_max) - L_cdf(10**bin_bot_L, L_min, L_max) # probability of L being in this bin
                 for k in range(self.num_chi):
-                    bin_bot_chi, bin_top_chi = self.chi_edges[j], self.chi_edges[j+1]
-                    ave_chi = (bin_bot_L+bin_top_L)/2
+                    bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
+                    ave_chi = (bin_bot_chi+bin_top_chi)/2
                     curr_prob[:, j, k] *= X_cdf(bin_top_chi, chi_min, chi_max, ave_L) - X_cdf(bin_bot_chi, chi_min, chi_max, ave_L)
-                    if i == len(self.cells) - 1 : 
-                        leftovers += curr_prob[i,j,k] * (vprime_cdf(np.inf, v0, ave_chi) - vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi))
                     if v_min2 < 0 and v_max2 < 0 : curr_prob[i,j,k] = 0
                     elif v_min2 < 0 : curr_prob[i,j,k] *= vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi)
                     else : curr_prob[i,j,k] *= vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi) - vprime_cdf(max(np.sqrt(v_min2), v0), v0, ave_chi)
 
-        total = np.sum(curr_prob) + leftovers
-        for i in range(len(self.cells)):
-            for j in range(self.num_L):
-                for k in range(self.num_chi):
-                    curr_prob[i,j,k] /= total
-
-    def run_sim(self, T, dt=1, upper=True):
+    def dxdt(self, time, upper):
         '''
-        simulates the evolution of the debris-satallite system for T years
+        calculates the rates of change of all parameters at the given time
+
+        Parameter(s):
+        time : time (index) of the values to be used
+        upper : whether or not to have debris come into the top shell (bool)
+
+        Keyword Parameter(s): None
+
+        Output(s):
+        dSdt : list of rates of change in S for each cell (1/yr)
+        dDdt : list of rates of change in D for each cell (1/yr)
+        dNdt : list of rates of change in the N matrix for each cell (1/yr)
+        dCldt : list of rates of change in C_l for each cell (1/yr)
+        dCnldt : list of rates of change in C_nl for each cell (1/yr)
+
+        Note : does not check that the time input is valid
+        '''
+
+        top_cell = self.cells[-1]
+        top_Nin = self.upper_N/top_cell.tau_N # debris going into top cell
+        dSdt = [] # array of changes in satallite values
+        dDdt = [] # array of changes in derelict values
+        dNdt = [] # array of changes in debris values
+        sat_coll = []
+        N_coll = [] # array of collision values
+        for i in range(len(self.cells)):
+            dSdt.append(0)
+            dDdt.append(0)
+            dNdt.append(np.zeros((self.num_L, self.num_chi)))
+            sat_coll.append(0)
+            N_coll.append(np.zeros((self.num_L, self.num_chi)))
+
+        # get initial D_in, N_in values
+        D_in = 0
+        N_in  = np.zeros((self.num_L, self.num_chi))
+        if upper : N_in = top_Nin
+
+        # iterate through cells, from top to bottom
+        for i in range(-1, (-1)*(len(self.cells) + 1), -1):
+            curr_cell = self.cells[i]
+            dNdt[i] += N_in
+            m_s = curr_cell.m_s
+            dSdt[i], dDdt[i], D_in, N_in, sat_coll[i], N_coll[i] = curr_cell.dxdt_cell(time, D_in)
+            dNdt[i] -= N_in # loses debris decaying outs
+            # simulate collisions
+            self.sim_colls(dNdt, sat_coll[i], m_s, m_s, i)
+            for j in range(self.num_L):
+                ave_L = 10**((self.logL_edges[j] + self.logL_edges[j+1])/2)
+                for k in range(self.num_chi):
+                    ave_AM = 10**((self.chi_edges[k] + self.chi_edges[k+1])/2)
+                    m_d = find_A(ave_L)/ave_AM
+                    self.sim_colls(dNdt, N_coll[i][j,k], m_s, m_d, i)
+                    
+            # add on debris lost to collisions
+            dNdt[i] -= N_coll[i]
+
+        # update values
+        dCldt = []
+        dCnldt = []
+        for i in range(len(self.cells)):
+            curr_cell = self.cells[i]
+            lethal_table = curr_cell.lethal_N
+            dCldt.append(sat_coll[i] + np.sum(N_coll[i][lethal_table==True]))
+            dCnldt.append(np.sum(N_coll[i][lethal_table==False]))
+
+        return dSdt, dDdt, dNdt, dCldt, dCnldt
+
+    def run_sim_euler(self, T, dt=1, upper=True):
+        '''
+        simulates the evolution of the debris-satallite system for T years using a Euler method
 
         Parameter(s):
         T : length of the simulation (yr)
@@ -172,61 +233,67 @@ class NCell:
         Output(s): None
         '''
 
-        top_cell = self.cells[-1]
-        top_Nin = self.upper_N/top_cell.tau_N # debris going into top cell
-
         while self.t[self.time] < T:
-            dSdt = [] # array of changes in satallite values
-            dDdt = [] # array of changes in derelict values
-            dNdt = [] # array of changes in debris values
-            sat_coll = []
-            N_coll = [] # array of collision values
-            for i in range(len(self.cells)):
-                dSdt.append(0)
-                dDdt.append(0)
-                dNdt.append(np.zeros((self.num_L, self.num_chi)))
-                sat_coll.append(0)
-                N_coll.append(np.zeros((self.num_L, self.num_chi)))
-
-            # get initial D_in, N_in values
-            D_in = 0
-            N_in  = np.zeros((self.num_L, self.num_chi))
-            if upper : N_in = top_Nin
-
-            # iterate through cells, from top to bottom
-            for i in range(-1, (-1)*(len(self.cells) + 1), -1):
+            dSdt, dDdt, dNdt, dCldt, dCnldt = self.dxdt(self.time, upper) # get current rates of change
+            for i in range(len(self.cells)): # iterate through cells and update values
                 curr_cell = self.cells[i]
-                dNdt[i] += N_in
-                m_s = curr_cell.m_s
-                dSdt[i], dDdt[i], D_in, N_in, sat_coll[i], N_coll[i] = curr_cell.dxdt_cell(D_in)
-                dNdt[i] -= N_in # loses debris decaying outs
-                # simulate collisions
-                self.sim_colls(dNdt, sat_coll[i], m_s, m_s, i)
-                for j in range(self.num_L):
-                    ave_L = 10**((self.logL_edges[j] + self.logL_edges[j+1])/2)
-                    for k in range(self.num_chi):
-                        ave_AM = 10**((self.chi_edges[k] + self.chi_edges[k+1])/2)
-                        m_d = find_A(ave_L)/ave_AM
-                        self.sim_colls(dNdt, N_coll[i][j,k], m_s, m_d, i)
-                        
-                # add on debris lost to collisions
-                dNdt[i] -= N_coll[i]
-
-            # update values
-            for i in range(len(self.cells)):
-                curr_cell = self.cells[i]
-                lethal_table = curr_cell.lethal_N
-                if self.t[self.time] < 1:
-                    print(dSdt[i], dDdt[i], dNdt[i])
                 curr_cell.S.append(curr_cell.S[self.time] + dSdt[i]*dt)
                 curr_cell.D.append(curr_cell.D[self.time] + dDdt[i]*dt)
                 curr_cell.N_bins.append(curr_cell.N_bins[self.time] + dNdt[i]*dt)
-                curr_cell.C_l.append(curr_cell.C_l[self.time] + (sat_coll[i] + np.sum(N_coll[i][lethal_table==True]))*dt)
-                curr_cell.C_nl.append(curr_cell.C_nl[self.time] + np.sum(N_coll[i][lethal_table==False])*dt)
+                curr_cell.C_l.append(curr_cell.C_l[self.time] + dCldt[i]*dt)
+                curr_cell.C_nl.append(curr_cell.C_nl[self.time] + dCnldt[i]*dt)
+            self.t.append(self.t[self.time] + dt) # update time
+            self.time += 1
 
+    def run_sim_precor(self, T, dt=1, upper=True):
+        '''
+        simulates the evolution of the debris-satallite system for T years using predictor-corrector model
+
+        Parameter(s):
+        T : length of the simulation (yr)
+
+        Keyword Parameter(s):
+        dt : timestep used by the simulation (yr, default 1yr)
+        upper : whether or not to have debris come into the top shell (bool, default True)
+
+        Output(s): None
+
+        Note(s): AB(2) method is used as predictor, Trapezoid method as corrector
+        '''
+
+        # get additional initial value if needed
+        if self.time == 0 : self.run_sim_euler(dt, dt=dt, upper=upper)
+        # get previous rate of change values
+        dSdt_n, dDdt_n, dNdt_n, dCldt_n, dCnldt_n = self.dxdt(self.time-1, upper=upper)
+        # get current rate of change values
+        dSdt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper=upper)
+
+        while self.t[self.time] < T:
+            # step forwards using AB(2) method
+            for i in range(len(self.cells)): # iterate through cells and update values
+                curr_cell = self.cells[i]
+                curr_cell.S.append(curr_cell.S[self.time] + 0.5*(3*dSdt_n1[i]-dSdt_n[i])*dt)
+                curr_cell.D.append(curr_cell.D[self.time] + 0.5*(3*dDdt_n1[i]-dDdt_n[i])*dt)
+                curr_cell.N_bins.append(curr_cell.N_bins[self.time] + 0.5*(3*dNdt_n1[i]-dNdt_n[i])*dt)
+                curr_cell.C_l.append(curr_cell.C_l[self.time] + 0.5*(3*dCldt_n1[i]-dCldt_n[i])*dt)
+                curr_cell.C_nl.append(curr_cell.C_nl[self.time] + 0.5*(3*dCnldt_n1[i]-dCnldt_n[i])*dt)
+            # get predicted rate of change from AB(2) method prediction
+            dSdt_n2, dDdt_n2, dNdt_n2, dCldt_n2, dCnldt_n2 = self.dxdt(self.time+1, upper=upper)
+            print(dSdt_n, dSdt_n1, dSdt_n2, 0.5*(dSdt_n2[0]+dSdt_n1[0])*dt)
+            # re-do step using Trapezoid method
+            for i in range(len(self.cells)): # iterate through cells and update values
+                curr_cell = self.cells[i]
+                curr_cell.S[self.time+1] = curr_cell.S[self.time] + 0.5*(dSdt_n2[i]+dSdt_n1[i])*dt
+                curr_cell.S[self.time+1] = curr_cell.D[self.time] + 0.5*(dDdt_n2[i]+dDdt_n1[i])*dt
+                curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*(dNdt_n2[i]+dNdt_n1[i])*dt
+                curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + 0.5*(dCldt_n2[i]+dCldt_n1[i])*dt
+                curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + 0.5*(dCnldt_n2[i]+dCnldt_n1[i])*dt
             # update time
             self.t.append(self.t[self.time] + dt)
-            self.time +=1
+            self.time += 1
+            # update which are the old and new rates of change
+            dSdt_n, dDdt_n, dNdt_n, dCldt_n, dCnldt_n = dSdt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1
+            dSdt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
 
     def sim_colls(self, dNdt, rate, m_1, m_2, index):
         '''
