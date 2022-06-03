@@ -9,6 +9,7 @@ import time
 
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
 Me = 5.97219e24 # mass of Earth (kg)
+Re = 6371 # radius of Earth (km)
 
 class NCell:
 
@@ -191,9 +192,7 @@ class NCell:
         M = calc_M(m_1, m_2, v_rel) # M factor
         Lmin, Lmax = 10**self.logL_edges[0], 10**self.logL_edges[-1] # min and max characteristic lengths
         chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1] # min and max chi values
-        N_debris = 0 # total number of debris
-        for i in range(num):
-            N_debris += calc_Ntot_coll(M, Lmin, Lmax)
+        N_debris = num*calc_Ntot_coll(M, Lmin, Lmax) # calculate total number of debris
         # calculate length distribution
         L_dist = randL_coll(N_debris, Lmin, Lmax)
         L_binned = np.zeros(self.num_L, dtype=np.int64) # those random values binned
@@ -215,8 +214,8 @@ class NCell:
                 for k in range(len(v_dist)): # iterate through the random velocity values
                     v_loc, direction = 10**v_dist[k], direction_dist[:,k] # v_loc in m/s
                     # calculate new orbital velocity (m/s)
-                    v2 = np.sqrt((v_orbit*1000 + v_loc*direction[0])**2 + (v_loc*direction[1])**2 + (v_loc*direction[2])**2)
-                    alt_new = 1/(2/(alt*1000) - v2/(G*Me))/1000 # calculate new altitude with vis-viva equation (in km)
+                    v2 = (v_orbit*1000 + v_loc*direction[0])**2 + (v_loc*direction[1])**2 + (v_loc*direction[2])**2
+                    alt_new = 1/(2/((alt+Re)*1000) - v2/(G*Me))/1000 - Re # calculate new altitude with vis-viva equation (in km)
                     index_new = self.alt_to_index(alt_new) # get index that the debris goes to
                     change_N[index_new][i,j] += 1 # add the debris to the right location
 

@@ -5,6 +5,7 @@ from BreakupModel import *
 
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
 Me = 5.97219e24 # mass of Earth (kg)
+Re = 6371 # radius of Earth (km)
 
 class Cell:
     
@@ -70,7 +71,7 @@ class Cell:
         self.del_t = del_t
         self.sigma = sigma
         self.v = v
-        self.v_orbit = np.sqrt(G*Me/(self.alt*1000))/1000 # orbital speed (on average, km/s)
+        self.v_orbit = np.sqrt(G*Me/((self.alt+Re)*1000))/1000 # orbital speed (on average, km/s)
         self.alpha = alpha
         self.P = P
         self.logL_edges = logL_edges
