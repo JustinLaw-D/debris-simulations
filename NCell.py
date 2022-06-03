@@ -1,5 +1,6 @@
 # contains class for collection of cells representing orbital shells
 
+from re import X
 from Cell import Cell
 import numpy as np
 import matplotlib.pyplot as plt
@@ -279,12 +280,11 @@ class NCell:
                 curr_cell.C_nl.append(curr_cell.C_nl[self.time] + 0.5*(3*dCnldt_n1[i]-dCnldt_n[i])*dt)
             # get predicted rate of change from AB(2) method prediction
             dSdt_n2, dDdt_n2, dNdt_n2, dCldt_n2, dCnldt_n2 = self.dxdt(self.time+1, upper=upper)
-            print(dSdt_n, dSdt_n1, dSdt_n2, 0.5*(dSdt_n2[0]+dSdt_n1[0])*dt)
             # re-do step using Trapezoid method
             for i in range(len(self.cells)): # iterate through cells and update values
                 curr_cell = self.cells[i]
                 curr_cell.S[self.time+1] = curr_cell.S[self.time] + 0.5*(dSdt_n2[i]+dSdt_n1[i])*dt
-                curr_cell.S[self.time+1] = curr_cell.D[self.time] + 0.5*(dDdt_n2[i]+dDdt_n1[i])*dt
+                curr_cell.D[self.time+1] = curr_cell.D[self.time] + 0.5*(dDdt_n2[i]+dDdt_n1[i])*dt
                 curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*(dNdt_n2[i]+dNdt_n1[i])*dt
                 curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + 0.5*(dCldt_n2[i]+dCldt_n1[i])*dt
                 curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + 0.5*(dCnldt_n2[i]+dCnldt_n1[i])*dt
