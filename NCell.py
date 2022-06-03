@@ -1,6 +1,5 @@
 # contains class for collection of cells representing orbital shells
 
-from re import X
 from Cell import Cell
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,8 +13,8 @@ Me = 5.97219e24 # mass of Earth (kg)
 class NCell:
 
     def __init__(self, S, D, N_l, alts, dh, lam, drag_lifetime, del_t=None, sigma=None, v=None, 
-                delta=None, alpha=None, P=None, m_s=None, AM_sat=None, L_min=1e-3, L_max=1, num_L=10,
-                chi_min=-3, chi_max=3, num_chi=10):
+                delta=None, alpha=None, P=None, m_s=None, AM_sat=None, tau_min=None, L_min=1e-3, 
+                L_max=1, num_L=10, chi_min=-3, chi_max=3, num_chi=10):
         '''
         Constructor for NCell class
     
@@ -37,6 +36,7 @@ class NCell:
         P : post-mission disposal probability in each shell (list, default 0.95)
         m_s : mass of the satallites in each band (list, kg, default 250kg)
         AM_sat : area-to-mass ratio of the satallites in each shell (list, m^2/kg, default 1/(20*2.2)m^2/kg)
+        tau_min : minimum decay lifetimes to consider for debris (list, yr, default 1/10yr)
         L_min : minimum characteristic length to consider (m, default 1mm)
         L_max : maximum characteristic length to consider (m, default 1m)
         num_L : number of debris bins in characteristic length (default 10)
@@ -70,6 +70,8 @@ class NCell:
             m_s = [None]*S.size
         if AM_sat == None:
             AM_sat = [1/(20*2.2)]*S.size
+        if tau_min == None:
+            tau_min = [1/10]*S.size
 
         self.alts = alts
         self.dh = dh
@@ -86,8 +88,8 @@ class NCell:
         for i in range(0, S.size):
             # compute atmospheric drag lifetime for satallites in the shell
             tau_D = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_sat[i])
-            # calculate decay paremeters for debris, initial debris values
-            N_initial, tau_N = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi))
+            # calculate decay paremeters for debris, initial debris values, and use those to make the N_factor_table
+            N_initial, tau_N, N_factor_table = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi))
             # generate initial distributions
             lethal_L = np.log10(randL_coll(N_l[i], 1e-1, L_max))
             nlethal_L = np.log10(randL_coll(delta[i]*N_l[i], L_min, 1e-1))
@@ -103,10 +105,13 @@ class NCell:
                     ave_chi = (bin_bot_chi + bin_top_chi)/2
                     N_initial[j,k] = len(chi_dist[(bin_bot_chi < chi_dist) & (chi_dist < bin_top_chi)])
                     tau_N[j,k] = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, 10**ave_chi)
+                    N_factor_table[j,k] = int(tau_N[j,k] > tau_min[i])
+                    N_initial[j,k] *= N_factor_table[j,k] # only count if you have to
 
             # initialize cell
             cell = Cell(S[i], D[i], N_initial, self.logL_edges, self.chi_edges, lam[i], alts[i], dh[i], tau_D, 
-                        tau_N, del_t=del_t[i], sigma=sigma[i], m_s=m_s[i], v=v[i], alpha=alpha[i], P=P[i])
+                        tau_N, N_factor_table, del_t=del_t[i], sigma=sigma[i], m_s=m_s[i], v=v[i], alpha=alpha[i], 
+                        P=P[i])
             self.cells.append(cell)
             if i == S.size - 1: self.upper_N = deepcopy(N_initial) # take the debris field above to be initial debris of top
 
@@ -150,6 +155,7 @@ class NCell:
                     if v_min2 < 0 and v_max2 < 0 : curr_prob[i,j,k] = 0
                     elif v_min2 < 0 : curr_prob[i,j,k] *= vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi)
                     else : curr_prob[i,j,k] *= vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi) - vprime_cdf(max(np.sqrt(v_min2), v0), v0, ave_chi)
+            curr_prob[i,:,:] *= self.cells[cell_index].N_factor_table # only count relevant debris
 
     def dxdt(self, time, upper):
         '''

@@ -8,8 +8,8 @@ Re = 6371 # radius of Earth (km)
 
 class Cell:
     
-    def __init__(self, S_i, D_i, N_i, logL_edges, chi_edges, lam, alt, dh, tau_D, tau_N, del_t=None, sigma=None, 
-                 m_s=None, v=None, alpha=None, P=None):
+    def __init__(self, S_i, D_i, N_i, logL_edges, chi_edges, lam, alt, dh, tau_D, tau_N, N_factor_table, del_t=None, 
+                 sigma=None, m_s=None, v=None, alpha=None, P=None, tau_min=None):
         '''Constructor for Cell class
     
         Parameter(s):
@@ -23,6 +23,7 @@ class Cell:
         dh : width of the shell (km)
         tau_D : atmospheric drag lifetime for derelicts (yr)
         tau_N : array of atmospheric drag lifetimes for debris (yr)
+        N_factor_table : same dimention as tau_N, 0s for ignored bins, 1 for non-ignored bins
 
         Keyword Parameter(s):
         del_t : mean satellite lifetime (yr, default 5yr)
@@ -31,6 +32,7 @@ class Cell:
         v : relative collision speed (km/s, default 10km/s)
         alpha : fraction of collisions a live satellites fails to avoid (default 0.2)
         P : post-mission disposal probability (default 0.95)
+        tau_min : minimum drag lifetime of debris to consider (yr, default 1/10)
 
         Output(s):
         Cell instance
@@ -51,6 +53,8 @@ class Cell:
             alpha = 0.2
         if P == None:
             P = 0.95
+        if tau_min == None:
+            tau_min = 1e-1
 
         # setup initial values for tracking live satallites, derelict satallites,
         # lethat debris, and non-lethal debris over time
@@ -66,6 +70,7 @@ class Cell:
         self.dh = dh
         self.tau_D = tau_D
         self.tau_N = tau_N
+        self.N_factor_table = N_factor_table
         self.del_t = del_t
         self.sigma = sigma
         self.v = v
@@ -117,10 +122,8 @@ class Cell:
         for i in range(self.num_L):
             ave_L = 10**((self.logL_edges[i] + self.logL_edges[i+1])/2) # average L value for these bins
             for j in range(self.num_chi):
-                dSdt_loc, dDdt_loc, decay_N_loc = self.N_events(S, D, N[i,j], ave_L, self.tau_N[i,j])
-                dSdt[i,j] = dSdt_loc
-                dDdt[i,j] = dDdt_loc
-                decay_N[i,j] = decay_N_loc
+                if self.N_factor_table[i,j] != 0: # only calculate for non-ignored bins
+                    dSdt[i,j], dDdt[i,j], decay_N[i,j] = self.N_events(S, D, N[i,j], ave_L, self.tau_N[i,j])
         
         # compute collisions involving derelicts
         dSDdt, dDDdt, decay_D = self.D_events(S, D)
