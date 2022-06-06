@@ -252,7 +252,7 @@ class NCell:
             self.t.append(self.t[self.time] + dt) # update time
             self.time += 1
 
-    def run_sim_precor(self, T, dt=1, upper=True):
+    def run_sim_precor(self, T, dt=1, mindtfactor=1000, maxdt=1, tolerance=1, upper=True):
         '''
         simulates the evolution of the debris-satallite system for T years using predictor-corrector model
 
@@ -260,43 +260,84 @@ class NCell:
         T : length of the simulation (yr)
 
         Keyword Parameter(s):
-        dt : timestep used by the simulation (yr, default 1yr)
+        dt : initial timestep used by the simulation (yr, default 1 yr)
+        mindtfactor : minimum time step used by the simulation is dt/mindtfactor
+        maxdt : maximum time step used by simulation (yr, default 1)
+        tolerance : tolerance for adaptive time step
         upper : whether or not to have debris come into the top shell (bool, default True)
 
         Output(s): None
 
         Note(s): AB(2) method is used as predictor, Trapezoid method as corrector
         '''
-
+        dt_min = dt/mindtfactor # get minimum possible time step
         # get additional initial value if needed
-        if self.time == 0 : self.run_sim_euler(dt, dt=dt, upper=upper)
+        if self.time == 0 : self.run_sim_euler(dt_min, dt=dt_min, upper=upper)
         # get previous rate of change values
         dSdt_n, dDdt_n, dNdt_n, dCldt_n, dCnldt_n = self.dxdt(self.time-1, upper=upper)
         # get current rate of change values
         dSdt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper=upper)
+        dt_old = dt_min # set up old time step variable
 
         while self.t[self.time] < T:
+            redo = False
             # step forwards using AB(2) method
             for i in range(len(self.cells)): # iterate through cells and update values
                 curr_cell = self.cells[i]
-                curr_cell.S.append(curr_cell.S[self.time] + 0.5*(3*dSdt_n1[i]-dSdt_n[i])*dt)
-                curr_cell.D.append(curr_cell.D[self.time] + 0.5*(3*dDdt_n1[i]-dDdt_n[i])*dt)
-                curr_cell.N_bins.append(curr_cell.N_bins[self.time] + 0.5*(3*dNdt_n1[i]-dNdt_n[i])*dt)
-                curr_cell.C_l.append(curr_cell.C_l[self.time] + 0.5*(3*dCldt_n1[i]-dCldt_n[i])*dt)
-                curr_cell.C_nl.append(curr_cell.C_nl[self.time] + 0.5*(3*dCnldt_n1[i]-dCnldt_n[i])*dt)
+
+                if len(curr_cell.S) < self.time + 2: # check if we need to lengthen things
+                    curr_cell.S.append(0)
+                    curr_cell.D.append(0)
+                    curr_cell.N_bins.append(0)
+                    curr_cell.C_l.append(0)
+                    curr_cell.C_nl.append(0)
+
+                curr_cell.S[self.time+1] = curr_cell.S[self.time] + 0.5*dt*((2+dt/dt_old)*dSdt_n1[i]-(dt/dt_old)*dSdt_n[i])
+                curr_cell.D[self.time+1] = curr_cell.D[self.time] + 0.5*dt*((2+dt/dt_old)*dDdt_n1[i]-(dt/dt_old)*dDdt_n[i])
+                curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*dt*((2+dt/dt_old)*dNdt_n1[i]-(dt/dt_old)*dNdt_n[i])
+                curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + 0.5*dt*((2+dt/dt_old)*dCldt_n1[i]-(dt/dt_old)*dCldt_n[i])
+                curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + 0.5*dt*((2+dt/dt_old)*dCnldt_n1[i]-(dt/dt_old)*dCnldt_n[i])
             # get predicted rate of change from AB(2) method prediction
             dSdt_n2, dDdt_n2, dNdt_n2, dCldt_n2, dCnldt_n2 = self.dxdt(self.time+1, upper=upper)
+            # set up variable for step size checking
+            epsilon = 0
             # re-do step using Trapezoid method
             for i in range(len(self.cells)): # iterate through cells and update values
                 curr_cell = self.cells[i]
+                old_S = curr_cell.S[self.time+1] # keep old values
+                old_D = curr_cell.D[self.time+1]
+                old_N = curr_cell.N_bins[self.time+1]
                 curr_cell.S[self.time+1] = curr_cell.S[self.time] + 0.5*(dSdt_n2[i]+dSdt_n1[i])*dt
+                if curr_cell.S[self.time] != 0:
+                    epsilon = max(np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.S[self.time+1]-old_S)), epsilon)
                 curr_cell.D[self.time+1] = curr_cell.D[self.time] + 0.5*(dDdt_n2[i]+dDdt_n1[i])*dt
+                if curr_cell.D[self.time] != 0:
+                    epsilon = max(np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.D[self.time+1]-old_D)), epsilon)
                 curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*(dNdt_n2[i]+dNdt_n1[i])*dt
+                valid_choice = curr_cell.N_bins[self.time] != 0
+                if np.any(valid_choice) == True:
+                    epsilon_options = np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.N_bins[self.time+1][valid_choice]-old_N[valid_choice]))
+                    epsilon = max(np.amax(epsilon_options), epsilon)
+                # we don't really care that much about the accuracy of the collision count
                 curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + 0.5*(dCldt_n2[i]+dCldt_n1[i])*dt
                 curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + 0.5*(dCnldt_n2[i]+dCnldt_n1[i])*dt
+
+            if epsilon > tolerance:
+                    redo = True
+            # update step size, and check if calculation needs to be redone
+            new_dt = min(np.abs(dt_old*(tolerance/epsilon)**(1/3)), maxdt)
+            if redo:
+                if dt < dt_min:
+                    print('WARNING : System may be too stiff to integrate')
+                    new_dt = dt_min
+                else:
+                    dt = new_dt
+                    continue
+
             # update time
             self.t.append(self.t[self.time] + dt)
             self.time += 1
+            dt = new_dt
             # update which are the old and new rates of change
             dSdt_n, dDdt_n, dNdt_n, dCldt_n, dCnldt_n = dSdt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1
             dSdt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
