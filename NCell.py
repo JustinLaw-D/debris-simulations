@@ -14,7 +14,7 @@ class NCell:
 
     def __init__(self, S, D, N_l, alts, dh, lam, drag_lifetime, del_t=None, sigma=None, v=None, 
                 delta=None, alpha=None, P=None, m_s=None, AM_sat=None, tau_min=None, L_min=1e-3, 
-                L_max=1, num_L=10, chi_min=-3, chi_max=3, num_chi=10):
+                L_max=1, num_L=10, chi_min=-3, chi_max=3, num_chi=10, num_dir=100):
         '''
         Constructor for NCell class
     
@@ -43,6 +43,7 @@ class NCell:
         chi_min : minimum log10(A/M) to consider (log10(m^2/kg), default -3)
         chi_max : maximum log10(A/M) to consider (log10(m^2/kg), default 3)
         num_chi : number of debris bins in log10(A/M) (default 10)
+        num_dir : number of random directions to sample in creating probability tables (default 100)
 
         Output(s):
         NCell instance
@@ -118,16 +119,17 @@ class NCell:
         # compute probability tables
         for i in range(S.size):
             curr_prob = np.zeros((S.size, self.num_L, self.num_chi))
-            self.fill_prob_table(curr_prob, i)
+            self.fill_prob_table(curr_prob, i, num_dir)
             self.probability_tables.append(curr_prob)
 
-    def fill_prob_table(self, curr_prob, cell_index):
+    def fill_prob_table(self, curr_prob, cell_index, num_dir):
         '''
         calculates probability table for given cell
 
         Input(s):
         curr_prob : current probability table (3-d array)
         cell_index : index of the current cell
+        num_dir : number of random directions to sample in creating probability tables
 
         Keyword Input(s): None
 
@@ -138,6 +140,8 @@ class NCell:
         r = self.cells[cell_index].alt # in km
         L_min, L_max = 10**self.logL_edges[0], 10**self.logL_edges[-1]
         chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1]
+        theta = np.random.uniform(low=0, high=np.pi, size=num_dir) # random directions
+        phi = np.random.uniform(low=0, high=2*np.pi, size=num_dir)
         for i in range(len(self.cells)): # iterate through cells
             curr_cell = self.cells[i]
             alt_min = curr_cell.alt - curr_cell.dh/2 # in km
@@ -152,9 +156,12 @@ class NCell:
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi+bin_top_chi)/2
                     curr_prob[:, j, k] *= X_cdf(bin_top_chi, chi_min, chi_max, ave_L) - X_cdf(bin_bot_chi, chi_min, chi_max, ave_L)
-                    if v_min2 < 0 and v_max2 < 0 : curr_prob[i,j,k] = 0
-                    elif v_min2 < 0 : curr_prob[i,j,k] *= vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi)
-                    else : curr_prob[i,j,k] *= vprime_cdf(max(np.sqrt(v_max2), v0), v0, ave_chi) - vprime_cdf(max(np.sqrt(v_min2), v0), v0, ave_chi)
+                    sum = 0
+                    for l in range(num_dir): # sample random directions
+                        if v_min2 < 0 and v_max2 < 0 : pass
+                        elif v_min2 < 0 : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), v0, theta[l], phi[l], ave_chi))
+                        else : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), theta[l], phi[l], v0, ave_chi) - vprime_cdf(np.sqrt(v_min2), v0, theta[l], phi[l], ave_chi))
+                    curr_prob[i,j,k] = sum/num_dir
             curr_prob[i,:,:] *= self.cells[cell_index].N_factor_table # only count relevant debris
 
     def dxdt(self, time, upper):

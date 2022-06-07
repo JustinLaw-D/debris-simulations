@@ -414,27 +414,33 @@ def v_cdf(v, x):
     # calculate CDF value
     return C*(erf((v-mu)/sigma_fac) + 1)
 
-def vprime_cdf(V, v0, x):
+def vprime_cdf(V, v0, theta, phi, x):
     '''
     evaluates cdf for the post-collision speed V, given a pre-collision
-    orbital speed v0 and x
+    orbital speed v0, post-collision direction of (theta, phi), and x
 
     evaluates cdf for log10(Delta v) values at given v and x
 
     Parameter(s):
     V : post-collison speed to evaluate at (m/s)
     v0 : pre-collision orbital speed (m/s)
+    theta : inclination angle (rad)
+    phi : azimuthal angle (rad)
     x : log10(A/M) value of the debris (log10(m^2/kg))
 
     Keyword Parameter(s): None
 
     Output(s):
     P : value of the CDF at V
-
-    Note: averages over all directions.
     '''
-    del_v = np.sqrt(V**2-v0**2)
-    return v_cdf(np.log10(del_v), x)
+    
+    descriminate = (v0*np.sin(theta)*np.cos(phi))**2 - (v0**2-V**2)
+    if descriminate < 0 : return 0 # cannot get a post-collision velocity this low
+    del_v_max = -v0*np.sin(theta)*np.cos(phi) + np.sqrt(descriminate)
+    del_v_min = -v0*np.sin(theta)*np.cos(phi) - np.sqrt(descriminate)
+    if del_v_max < 0 : return 0 # cannot get a post-collision velocity this low
+    elif del_v_min <= 0 : return v_cdf(np.log10(del_v_max), x)
+    else : return v_cdf(np.log10(del_v_max), x) - v_cdf(np.log10(del_v_min), x)
 
 
 def randv_coll(num, x):
