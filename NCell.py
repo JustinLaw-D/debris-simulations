@@ -39,19 +39,19 @@ class NCell:
         '''
 
         # convert Nones to array of Nones
-        if del_t == None:
+        if del_t is None:
             del_t = [None]*S.size
-        if sigma == None:
+        if sigma is None:
             sigma = [None]*S.size
-        if v == None:
+        if v is None:
             v = [None]*S.size
-        if delta == None:
+        if delta is None:
             delta = [None]*S.size
-        if alpha == None:
+        if alpha is None:
             alpha = [None]*S.size
-        if P == None:
+        if P is None:
             P = [None]*S.size
-        if N_0 == None:
+        if N_0 is None:
             N_0 = [None]*S.size
 
         self.alts = alts
