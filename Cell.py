@@ -203,8 +203,8 @@ class Cell:
         n = D/V # number density of the derelicts
 
         # rate of collisions between derelicts and satallites (live/derelict)
-        dSDdt = n*sigma*v*S # collisions cannot be avoided
-        dDDdt = n*sigma*v*D 
+        dSDdt = self.alpha*n*sigma*v*S
+        dDDdt = n*sigma*v*D # collisions cannot be avoided
         nSD_col = dSDdt*dt # convert rates to number of collisions
         nDD_col = dDDdt*dt
         # randomly decide if a fractional collision occurs
