@@ -1,4 +1,4 @@
-# contains class for a single atmospheric layer (Cell)
+# contains class for a single atmospheric layer (Cell), and satallites (functions more as a struct)
 
 import numpy as np
 from BreakupModel import *
@@ -215,3 +215,41 @@ class Cell:
             for j in range(self.num_chi):
                 ave_chi = (self.chi_edges[j] + self.chi_edges[j+1])/2
                 self.lethal_N[i,j] = is_catastrophic(self.m_s, ave_L, 10**ave_chi, self.v)
+
+class Satellite:
+
+    def __init__(self, S_i, S_di, D_i, m, sigma, lam, del_t, tau_disp, alpha, P, tau):
+        '''
+        constructor method for Satellite class
+
+        Parameter(s):
+        S_i : initial number of live satellites of this type
+        S_di : initial number of de-orbiting satellites of this type
+        D_i : initial number of derelict satellites of this type
+        m : mass of each satellite (kg)
+        sigma : collision cross-section of each satellite (m^2)
+        lam : launch rate of the satellites (1/yr)
+        del_t : mean satellite lifetime (yr)
+        tau_disp : mean time for satellite to de-orbit from shell (yr)
+        alpha : fraction of collisions a live satellites fails to avoid
+        P : post-mission disposal probability
+        tau : atmospheric drag lifetime of a satellite (yr)
+
+        Keyword Parameter(s): None
+
+        Output(s): Instance of Satellite class
+
+        Note(s): preforms no validity checks on given values
+        '''
+
+        self.S = [S_i]
+        self.S_d = [S_di]
+        self.D = [D_i]
+        self.m = m
+        self.sigma = sigma
+        self.lam = lam
+        self.del_t = del_t
+        self.tau_disp = tau_disp
+        self.alpha = alpha
+        self.P = P
+        self.tau = tau
