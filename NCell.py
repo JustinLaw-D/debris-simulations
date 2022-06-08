@@ -1,6 +1,6 @@
 # contains class for collection of cells representing orbital shells
 
-from Cell import Cell
+from Cell import *
 import numpy as np
 import matplotlib.pyplot as plt
 from BreakupModel import *
@@ -12,30 +12,32 @@ Me = 5.97219e24 # mass of Earth (kg)
 
 class NCell:
 
-    def __init__(self, S, D, N_l, alts, dh, lam, drag_lifetime, del_t=None, sigma=None, v=None, 
-                delta=None, alpha=None, P=None, m_s=None, AM_sat=None, tau_min=None, L_min=1e-3, 
-                L_max=1, num_L=10, chi_min=-3, chi_max=3, num_chi=10, num_dir=100):
+    def __init__(self, S, S_d, D, N_l, alts, dh, lam, drag_lifetime, del_t=None, sigma=None, v=None, 
+                delta=None, alpha=None, P=None, m_s=None, AM_sat=None, tau_do=None, tau_min=None, 
+                L_min=1e-3, L_max=1, num_L=10, chi_min=-2, chi_max=2, num_chi=10, num_dir=100):
         '''
         Constructor for NCell class
     
         Parameter(s):
-        S : initial number of live satellites in each shell (array)
-        D : initial number of derelict satellites in each shell (array)
-        N_l : initial number of lethal debris in each shell (array)
+        S : list of initial number of live satellites in each shell of each type (list of arrays)
+        S_d : list of initial number of deorbiting satellites in each shell of each type (list of arrays)
+        D : list of initial number of derelict satellites in each shell of each type (list of arrays)
+        N_l : initial number of catestrophically lethal debris in each shell (array)
         alts : altitude of the shell's centre (array, km)
         dh : width of the shells (array, km)
-        lam : launch rate of satellites into the each shell (array, 1/yr)
+        lam : launch rate of satellites of each type into the each shell (list of arrays, 1/yr)
         drag_lifetime : function that computes atmospheric drag lifetime ((km, km, m^2/kg) -> yr)
 
         Keyword Parameter(s):
-        del_t : mean satellite lifetime in each shell (list, yr, default 5yr)
-        sigma : satellite cross-section in each shell (list, m^2, default 10m^2)
+        del_t : mean satellite lifetime of each type in each shell (list of lists, yr, default 5yr)
+        sigma : satellite cross-section of each type in each shell (list of lists, m^2, default 10m^2)
         v : relative collision speed in each shell (list, km/s, default 10km/s)
-        delta : initial ratio of the density of disabling to lethal debris in each shell (list, default 10)
-        alpha : fraction of collisions a live satellites fails to avoid in each shell (list, default 0.2)
-        P : post-mission disposal probability in each shell (list, default 0.95)
-        m_s : mass of the satallites in each band (list, kg, default 250kg)
-        AM_sat : area-to-mass ratio of the satallites in each shell (list, m^2/kg, default 1/(20*2.2)m^2/kg)
+        delta : initial ratio of the density of disabling to catestrophic debris in each shell (list, default 10)
+        alpha : fraction of collisions a live satellites of each type fails to avoid in each shell (list of lists, default 0.2)
+        P : post-mission disposal probability for satellites of each type in each shell (list of lists, default 0.95)
+        m_s : mass of the satallites of eachy type in each band (list of lists, kg, default 250kg)
+        AM_sat : area-to-mass ratio of the satallites of each type in each shell (list of lists, m^2/kg, default 1/(20*2.2)m^2/kg)
+        tau_do : average deorbiting time for satellites of each type in each shell (list of lists, yr, default decay_time/10)
         tau_min : minimum decay lifetimes to consider for debris (list, yr, default 1/10yr)
         L_min : minimum characteristic length to consider (m, default 1mm)
         L_max : maximum characteristic length to consider (m, default 1m)
@@ -56,23 +58,25 @@ class NCell:
 
         # convert Nones to array of Nones
         if del_t is None:
-            del_t = [None]*S.size
+            del_t = [None]*len(S)
         if sigma is None:
-            sigma = [None]*S.size
+            sigma = [None]*len(S)
         if v is None:
-            v = [None]*S.size
+            v = [None]*len(S)
         if delta is None:
-            delta = [10]*S.size
+            delta = [10]*len(S)
         if alpha is None:
-            alpha = [None]*S.size
+            alpha = [None]*len(S)
         if P is None:
-            P = [None]*S.size
+            P = [None]*len(S)
         if m_s is None:
-            m_s = [None]*S.size
+            m_s = [None]*len(S)
         if AM_sat is None:
-            AM_sat = [1/(20*2.2)]*S.size
+            AM_sat = [1/(20*2.2)]*len(S)
+        if tau_do is None:
+            tau_do = [None]*len(S)
         if tau_min is None:
-            tau_min = [1/10]*S.size
+            tau_min = [1/10]*len(S)
 
         self.alts = alts
         self.dh = dh
@@ -86,9 +90,50 @@ class NCell:
         self.chi_edges = np.linspace(chi_min, chi_max, num=num_chi+1)
         self.probability_tables = list() # list of probability tables for collisions in each bin
 
-        for i in range(0, S.size):
-            # compute atmospheric drag lifetime for satallites in the shell
-            tau_D = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_sat[i])
+        for i in range(0, len(S)): # iterate through shells
+
+            # convert Nones to array of Nones
+            if del_t[i] is None:
+                del_t[i] = [None]*len(S[i])
+            if sigma[i] is None:
+                sigma[i] = [None]*len(S[i])
+            if alpha[i] is None:
+                alpha[i] = [None]*len(S[i])
+            if P[i] is None:
+                P[i] = [None]*len(S[i])
+            if m_s[i] is None:
+                m_s[i] = [None]*len(S[i])
+            if AM_sat[i] is None:
+                AM_sat[i] = [None]*len(S[i])
+            if tau_do[i] is None:
+                tau_do[i] = [None]*len(S[i])
+
+            sat_list = []
+
+            for j in range(len(S[0])): # iterate through satellite types, and generate object for each
+                
+                # convert Nones to default values
+                if del_t[i][j] is None:
+                    del_t[i][j] = 5
+                if sigma[i][j] is None:
+                    sigma[i][j] = 10
+                if alpha[i][j] is None:
+                    alpha[i][j] = 0.2
+                if P[i][j] is None:
+                    P[i][j] = 0.95
+                if m_s[i][j] is None:
+                    m_s[i][j] = 250
+                if AM_sat[i][j] is None:
+                    AM_sat[i][j] = 1/(20*2.2)
+
+                # compute atmospheric drag lifetime for satallites in the shell
+                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_sat[i][j])
+                if tau_do[i][j] is None:
+                    tau_do[i][j] = tau/10
+                sat = Satellite(S[i][j], S_d[i][j], D[i][j], m_s[i][j], sigma[i][j], lam[i][j], del_t[i][j],
+                                tau_do[i][j], alpha[i][j], P[i][j], AM_sat[i][j], tau)
+                sat_list.append(sat)
+
             # calculate decay paremeters for debris, initial debris values, and use those to make the N_factor_table
             N_initial, tau_N, N_factor_table = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi))
             # generate initial distributions
@@ -110,9 +155,7 @@ class NCell:
                     N_initial[j,k] *= N_factor_table[j,k] # only count if you have to
 
             # initialize cell
-            cell = Cell(S[i], D[i], N_initial, self.logL_edges, self.chi_edges, lam[i], alts[i], dh[i], tau_D, 
-                        tau_N, N_factor_table, del_t=del_t[i], sigma=sigma[i], m_s=m_s[i], v=v[i], alpha=alpha[i], 
-                        P=P[i])
+            cell = Cell(sat_list, N_initial, self.logL_edges, self.chi_edges, alts[i], dh[i], tau_N, N_factor_table, v=v[i])
             self.cells.append(cell)
             if i == S.size - 1: self.upper_N = deepcopy(N_initial) # take the debris field above to be initial debris of top
 

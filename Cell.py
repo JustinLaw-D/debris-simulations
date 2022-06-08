@@ -8,7 +8,7 @@ Re = 6371 # radius of Earth (km)
 
 class Cell:
     
-    def __init__(self, S_i, N_i, logL_edges, chi_edges, alt, dh, tau_N, N_factor_table, v=None, tau_min=None):
+    def __init__(self, S_i, N_i, logL_edges, chi_edges, alt, dh, tau_N, N_factor_table, v=None):
         '''Constructor for Cell class
     
         Parameter(s):
@@ -32,8 +32,6 @@ class Cell:
         # set default values as needed
         if v == None:
             v = 10
-        if tau_min == None:
-            tau_min = 1e-1
 
         # setup initial values for tracking live satallites, derelict satallites,
         # lethat debris, and non-lethal debris over time
