@@ -77,7 +77,7 @@ class Cell:
         S_dout : list of rate of satellites de-orbiting from the cell of each type (yr^(-1))
         D_out : list of rate of satellites decaying from the cell of each type (yr^(-1))
         N_out : matrix with the rate of exiting debris from each bin (yr^(-1))
-        D_dt : list of matrices of rates of collisions between satellites (yr^(-1))
+        D_dt : matrix with total rate of collisions between satellites (yr^(-1))
         C_dt : list of matrices with the rate of collisions from each bin with each satellite type (yr^(-1))
 
         Note: Assumes that collisions with debris of L_cm < 10cm cannot be avoided, and
@@ -101,7 +101,6 @@ class Cell:
         dSdt_tot = [] # total rate of change for live satellites
         dS_ddt_tot = [] # total rate of change for de-orbiting satellites
         dDdt_tot = [] # total rate of change of derelict satellites
-        D_dt = []
         C_dt = []
         for i in range(self.num_types):
             dSdt.append(np.zeros(N.shape))
@@ -138,24 +137,24 @@ class Cell:
                 if i > j: dDDdt[i,j] = 0 # avoid double counting
                 tot_S_sat_coll += dSDdt[i,j]
                 tot_Sd_sat_coll += dS_dDdt[i,j]
-                if i == j : tot_D_sat_coll += dSDdt[i,j] + dS_dDdt[i,j] + 2*dDDdt[i,j]
-                else : tot_D_sat_coll += dSDdt[i,j] + dS_dDdt[i,j] + dDDdt[i,j]
+                if i == j : tot_D_sat_coll += dSDdt[j,i] + dS_dDdt[j,i] + 2*dDDdt[i,j]
+                else : tot_D_sat_coll += dSDdt[j,i] + dS_dDdt[j,i] + dDDdt[i,j]
 
             # compute decay events for satellites
             del_t = self.satellites[i].del_t
             tau_do = self.satellites[i].tau_do
-            tau = self.satellites[i].tau_
+            tau = self.satellites[i].tau
             kill_S[i], deorbit_S[i], decay_D[i] = S/del_t, S_d/tau_do, D/tau
 
             # sum everything up
             lam, P = self.satellites[i].lam, self.satellites[i].P
             dSdt_tot.append(lam - kill_S[i] - np.sum(dSdt[i]) - tot_S_sat_coll)
-            dS_ddt_tot.append(S_din + P*kill_S[i] - np.sum(dS_ddt[i]) - deorbit_S[i] - tot_Sd_sat_coll)
-            dDdt_tot.append(D_in + (1-P)*kill_S[i] - np.sum(dDdt[i]) - decay_D[i] - tot_D_sat_coll
+            dS_ddt_tot.append(S_din[i] + P*kill_S[i] - np.sum(dS_ddt[i]) - deorbit_S[i] - tot_Sd_sat_coll)
+            dDdt_tot.append(D_in[i] + (1-P)*kill_S[i] - np.sum(dDdt[i]) - decay_D[i] - tot_D_sat_coll
                             + np.sum(dSdt[i][self.lethal_N[i] == False]) + np.sum(dS_ddt[i][self.lethal_N[i] == False]))
-            D_dt.append(np.sum(dSDdt) + np.sum(dS_dDdt) + np.sum(dDDdt))
             C_dt.append(dSdt[i] + dS_ddt[i] + dDdt[i])
 
+        D_dt = dSDdt + dS_dDdt + dDDdt
         return dSdt_tot, dS_ddt_tot, dDdt_tot, deorbit_S, decay_D, decay_N, D_dt, C_dt
 
     def N_events(self, S, S_d, D, N, sigma, alpha, ave_L, tau):
@@ -246,7 +245,7 @@ class Cell:
         '''
 
         for i in range(self.num_types):
-            m_s = self.satellites[i].m_s
+            m_s = self.satellites[i].m
             for j in range(self.num_L):
                 ave_L = 10**((self.logL_edges[j] + self.logL_edges[j+1])/2) # average L value for these bins
                 for k in range(self.num_chi):

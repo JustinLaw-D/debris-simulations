@@ -72,7 +72,7 @@ class NCell:
         if m_s is None:
             m_s = [None]*len(S)
         if AM_sat is None:
-            AM_sat = [1/(20*2.2)]*len(S)
+            AM_sat = [None]*len(S)
         if tau_do is None:
             tau_do = [None]*len(S)
         if tau_min is None:
@@ -157,11 +157,11 @@ class NCell:
             # initialize cell
             cell = Cell(sat_list, N_initial, self.logL_edges, self.chi_edges, alts[i], dh[i], tau_N, N_factor_table, v=v[i])
             self.cells.append(cell)
-            if i == S.size - 1: self.upper_N = deepcopy(N_initial) # take the debris field above to be initial debris of top
+            if i == len(S) - 1: self.upper_N = deepcopy(N_initial) # take the debris field above to be initial debris of top
 
         # compute probability tables
-        for i in range(S.size):
-            curr_prob = np.zeros((S.size, self.num_L, self.num_chi))
+        for i in range(len(S)):
+            curr_prob = np.zeros((len(S), self.num_L, self.num_chi))
             self.fill_prob_table(curr_prob, i, num_dir)
             self.probability_tables.append(curr_prob)
 
@@ -219,6 +219,7 @@ class NCell:
 
         Output(s):
         dSdt : list of rates of change in S for each cell (1/yr)
+        dS_ddt : list of rates of change in S_d for each cell (1/yr)
         dDdt : list of rates of change in D for each cell (1/yr)
         dNdt : list of rates of change in the N matrix for each cell (1/yr)
         dCldt : list of rates of change in C_l for each cell (1/yr)
@@ -228,21 +229,25 @@ class NCell:
         '''
 
         top_cell = self.cells[-1]
+        num_types = top_cell.num_types
         top_Nin = self.upper_N/top_cell.tau_N # debris going into top cell
         dSdt = [] # array of changes in satallite values
+        dS_ddt = [] # array of changes in de-orbiting values
         dDdt = [] # array of changes in derelict values
         dNdt = [] # array of changes in debris values
         sat_coll = []
         N_coll = [] # array of collision values
         for i in range(len(self.cells)):
-            dSdt.append(0)
-            dDdt.append(0)
+            dSdt.append([])
+            dS_ddt.append([])
+            dDdt.append([])
             dNdt.append(np.zeros((self.num_L, self.num_chi)))
-            sat_coll.append(0)
-            N_coll.append(np.zeros((self.num_L, self.num_chi)))
+            sat_coll.append(np.zeros((num_types, num_types)))
+            N_coll.append([])
 
         # get initial D_in, N_in values
-        D_in = 0
+        S_din = np.zeros(num_types)
+        D_in = np.zeros(num_types)
         N_in  = np.zeros((self.num_L, self.num_chi))
         if upper : N_in = top_Nin
 
@@ -250,31 +255,40 @@ class NCell:
         for i in range(-1, (-1)*(len(self.cells) + 1), -1):
             curr_cell = self.cells[i]
             dNdt[i] += N_in
-            m_s = curr_cell.m_s
-            dSdt[i], dDdt[i], D_in, N_in, sat_coll[i], N_coll[i] = curr_cell.dxdt_cell(time, D_in)
+            dSdt[i], dS_ddt[i], dDdt[i], S_din, D_in, N_in, sat_coll[i], N_coll[i] = curr_cell.dxdt_cell(time, S_din, D_in)
             dNdt[i] -= N_in # loses debris decaying outs
             # simulate collisions
-            self.sim_colls(dNdt, sat_coll[i], m_s, m_s, i)
-            for j in range(self.num_L):
-                ave_L = 10**((self.logL_edges[j] + self.logL_edges[j+1])/2)
-                for k in range(self.num_chi):
-                    ave_AM = 10**((self.chi_edges[k] + self.chi_edges[k+1])/2)
-                    m_d = find_A(ave_L)/ave_AM
-                    self.sim_colls(dNdt, N_coll[i][j,k], m_s, m_d, i)
+            for j in range(num_types): # iterate through satellite types
+
+                m_s1 = curr_cell.satellites[j].m
+                for k in range(j+1, num_types): # satellite-satellite collisions
+                    m_s2 = curr_cell.satellites[k].m
+                    self.sim_colls(dNdt, sat_coll[i][j,k] + sat_coll[i][k,j], m_s1, m_s2, i)
+                self.sim_colls(dNdt, sat_coll[i][j,j], m_s1, m_s1, i) # collisions between satellites of same type
+                
+                for k in range(self.num_L): # satellite-debris collisions
+                    ave_L = 10**((self.logL_edges[k] + self.logL_edges[k+1])/2)
+                    for l in range(self.num_chi):
+                        ave_AM = 10**((self.chi_edges[l] + self.chi_edges[l+1])/2)
+                        m_d = find_A(ave_L)/ave_AM
+                        self.sim_colls(dNdt, N_coll[i][j][k,l], m_s1, m_d, i)
                     
             # add on debris lost to collisions
-            dNdt[i] -= N_coll[i]
+            dNdt[i] -= sum(N_coll[i])
 
         # update values
         dCldt = []
         dCnldt = []
         for i in range(len(self.cells)):
             curr_cell = self.cells[i]
-            lethal_table = curr_cell.lethal_N
-            dCldt.append(sat_coll[i] + np.sum(N_coll[i][lethal_table==True]))
-            dCnldt.append(np.sum(N_coll[i][lethal_table==False]))
+            dCldt.append(np.sum(sat_coll[i]))
+            dCnldt.append(0)
+            for j in range(num_types):
+                lethal_table = curr_cell.lethal_N[j]
+                dCldt[i] += np.sum(sum(N_coll[i])[lethal_table==True])
+                dCnldt[i] += np.sum(sum(N_coll[i])[lethal_table==False])
 
-        return dSdt, dDdt, dNdt, dCldt, dCnldt
+        return dSdt, dS_ddt, dDdt, dNdt, dCldt, dCnldt
 
     def run_sim_euler(self, T, dt=1, upper=True):
         '''
@@ -291,14 +305,16 @@ class NCell:
         '''
 
         while self.t[self.time] < T:
-            dSdt, dDdt, dNdt, dCldt, dCnldt = self.dxdt(self.time, upper) # get current rates of change
+            dSdt, dS_ddt, dDdt, dNdt, dCldt, dCnldt = self.dxdt(self.time, upper) # get current rates of change
             for i in range(len(self.cells)): # iterate through cells and update values
                 curr_cell = self.cells[i]
-                curr_cell.S.append(curr_cell.S[self.time] + dSdt[i]*dt)
-                curr_cell.D.append(curr_cell.D[self.time] + dDdt[i]*dt)
                 curr_cell.N_bins.append(curr_cell.N_bins[self.time] + dNdt[i]*dt)
                 curr_cell.C_l.append(curr_cell.C_l[self.time] + dCldt[i]*dt)
                 curr_cell.C_nl.append(curr_cell.C_nl[self.time] + dCnldt[i]*dt)
+                for j in range(curr_cell.num_types):
+                    curr_cell.satellites[j].S.append(curr_cell.satellites[j].S[self.time] + dSdt[i][j]*dt)
+                    curr_cell.satellites[j].S_d.append(curr_cell.satellites[j].S_d[self.time] + dS_ddt[i][j]*dt)
+                    curr_cell.satellites[j].D.append(curr_cell.satellites[j].D[self.time] + dDdt[i][j]*dt)
             self.t.append(self.t[self.time] + dt) # update time
             self.time += 1
 
@@ -418,108 +434,6 @@ class NCell:
         for i in range(len(self.cells)): # iterate through cells to send debris to
             dNdt[i] += N_debris*prob_table[i, :, :]
 
-    def run_live_sim(self, dt=1, upper=True, dt_live=1, S=True, D=True, N=True):
-        '''
-        Runs a live simulation of the evolution of orbital shells for total time T, using the desired
-        method, displaying current results, and allowing for the satellite launch rate of some shells
-        to be adjusted
-
-        Parameter(s): None
-        
-        Keyword Parameter(s):
-        dt : initial time step used by simulation (yr, default 1)
-        upper : wether or not to have debris come into the topmost layer (default True)
-        dt_live : time between updates of the graph/oppertunity for user input (yr, default 1)
-        S : whether or not to display the number of live satellites (default True)
-        D : whether or not to display the number of derelict satellites (default True)
-        N : whether or not to display the number of lethal debris (default True)
-
-        Output(s): Nothing
-
-        Note : user input allows you to change which shells are being displayed, change the valus of S, D, N, 
-        change the satellite launch rate of any shell, and choose the dt/dt_live for the next step
-        '''
-
-        # setup
-        display_bools = [] # list representing if each shell is displayed
-        for i in range(len(self.cells)): # start by displaying shells with non-zero launch rates
-            if self.cells[i].lam != 0:
-                display_bools.append(True)
-            else:
-                display_bools.append(False)
-        
-        fig, ax = plt.subplots() # setup plots
-        
-        cont = True
-        while cont == True: # start event loop
-            ax.clear()
-            self.run_sim(self.t[self.time] + dt_live, dt=dt, upper=upper) # step forwards
-
-            # pull well-formatted results
-            t_list = self.get_t()
-            S_list = self.get_S()
-            D_list = self.get_D()
-            N_list = self.get_N()
-
-             # display results
-            for i in range(len(self.cells)):
-                if display_bools[i] == True:
-                    if S == True:
-                        ax.plot(t_list, S_list[i], label='S'+str(self.alts[i]))
-                    if D == True:
-                        ax.plot(t_list, D_list[i], label='D'+str(self.alts[i]))
-                    if N == True:
-                        ax.plot(t_list, N_list[i], label='N'+str(self.alts[i]))
-            ax.set_xlabel('time (yr)')
-            ax.set_ylabel('log(number)')
-            ax.set_yscale('log')
-            ax.legend()
-            plt.tight_layout()
-            plt.show(block=False)
-
-            # take user input
-            x = input('Continue running (y/n) : ')
-            if x != 'y':
-                cont = False
-                continue
-            x = input('Make any changes (y/n) : ')
-            if x != 'y':
-                continue
-            x = input('Change runtime before next break (y/n) : ')
-            if x != 'n':
-                dt_live = float(input('Input runtime before next break : '))
-            x = input('Change satellite launch rates (y/n) : ')
-            while x != 'n':
-                h = float(input('Input shell height to change launch rate of : '))
-                index = self.alt_to_index(h)
-                if index == -1:
-                    print('ERROR: Invalid shell height')
-                else:
-                    lamb = float(input('Input new satellite launch rate : '))
-                    self.cells[index].lam = lamb
-                    display_bools[index] = True
-                x = input('Change more satellite launch rates (y/n) : ')
-            x = input('Display live satellites (y/n) : ')
-            if x == 'n' : S = False
-            else : S = True
-            x = input('Display derelict satellites (y/n) : ')
-            if x == 'n' : D = False
-            else : D = True
-            x = input('Display lethal debris (y/n) : ')
-            if x == 'n' : N = False
-            else : N = True
-            x = input('Change which shells are displayed (y/n) : ')
-            while x != 'n':
-                h = float(input('Input shell height to change display of : '))
-                index = self.alt_to_index(h)
-                if index == -1:
-                    print('ERROR: Invalid shell height')
-                else:
-                    y = input('Diplay this shell (y/n) : ')
-                    if y == 'y' : display_bools[index] = True
-                    elif y == 'n' : display_bools[index] = False
-                x = input('Change more shell displays (y/n) : ')
-
     def get_t(self):
         '''
         returns array of times used in the simulation
@@ -536,7 +450,7 @@ class NCell:
     
     def get_S(self):
         '''
-        returns arrays for number of live satellites in each shell
+        returns list of lists for number of live satellites in each shell
 
         Parameter(s): None
 
@@ -548,12 +462,14 @@ class NCell:
 
         to_return = []
         for cell in self.cells:
-            to_return.append(cell.S)
+            to_return.append([])
+            for j in range(cell.num_types):
+                to_return[-1].append(cell.satellites[j].S)
         return to_return
 
-    def get_D(self):
+    def get_SD(self):
         '''
-        returns arrays for number of derelict satellites in each shell
+        returns list of lists for number of de-orbiting satellites in each shell
 
         Parameter(s): None
 
@@ -565,7 +481,28 @@ class NCell:
 
         to_return = []
         for cell in self.cells:
-            to_return.append(cell.D)
+            to_return.append([])
+            for j in range(cell.num_types):
+                to_return[-1].append(cell.satellites[j].S_d)
+        return to_return
+
+    def get_D(self):
+        '''
+        returns list of lists for number of derelict satellites in each shell
+
+        Parameter(s): None
+
+        Keyword Parameter(s): None
+
+        Returns:
+        list of array of D values for each cell, in order of ascending altitude
+        '''
+
+        to_return = []
+        for cell in self.cells:
+            to_return.append([])
+            for j in range(cell.num_types):
+                to_return[-1].append(cell.satellites[j].D)
         return to_return
 
     def get_N(self):
