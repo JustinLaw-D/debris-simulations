@@ -76,7 +76,7 @@ def calc_M(m_s, m_d, v):
     if E_p >= 40 : return m_s + m_d # catestrophic collision
     else : return m_d*v # non-catestrophic collision
 
-def calc_Ntot(M, Lmin, Lmax, typ):
+def calc_Ntot(M, Lmin, Lmax, typ, C=1):
     '''
     calculates the total number of debris produced with characteristic length
     between Lmin and Lmax
@@ -87,18 +87,17 @@ def calc_Ntot(M, Lmin, Lmax, typ):
     Lmax : maximum characteristic length (m)
     typ : one of 'coll' (collision) or 'expl' (explosion)
 
-    Keyword Parameter(s): None
+    Keyword Parameter(s):
+    C : fit parameter for explosions, ignored for collisions (default 1)
 
     Output(s):
     N : total number of fragments of Lmax > size > Lmin
 
-    Note(s): TODO figure out how to calculate c. returns 0 on an invalid type
+    Note(s): returns 0 on an invalid type
     '''
-    def c():
-        return 1
 
     if typ == 'coll' : return 0.1*(M**0.75)*(Lmin**(-1.71)) - 0.1*(M**0.75)*(Lmax**(-1.71))
-    elif typ == 'expl' : return 6*c()*(Lmin**(-1.6) - Lmax**(-1.6))
+    elif typ == 'expl' : return 6*C*(Lmin**(-1.6) - Lmax**(-1.6))
     else:
         print('WARNING: Invalid Debris Generation Type')
         return 0
