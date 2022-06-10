@@ -150,7 +150,7 @@ class Cell:
             lam, P = self.satellites[i].lam, self.satellites[i].P
             dSdt_tot.append(lam - kill_S[i] - np.sum(dSdt[i]) - tot_S_sat_coll)
             dS_ddt_tot.append(S_din[i] + P*kill_S[i] - np.sum(dS_ddt[i]) - deorbit_S[i] - tot_Sd_sat_coll)
-            dDdt_tot.append(D_in[i] + (1-P)*kill_S[i] - np.sum(dDdt[i]) - decay_D[i] - tot_D_sat_coll
+            dDdt_tot.append(D_in[i] + (1-P)*kill_S[i] - np.sum(dDdt[i][self.lethal_N[i] == True]) - decay_D[i] - tot_D_sat_coll
                             + np.sum(dSdt[i][self.lethal_N[i] == False]) + np.sum(dS_ddt[i][self.lethal_N[i] == False]))
             C_dt.append(dSdt[i] + dS_ddt[i] + dDdt[i])
 
