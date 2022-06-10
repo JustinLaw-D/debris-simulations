@@ -340,9 +340,9 @@ class NCell:
         # get additional initial value if needed
         if self.time == 0 : self.run_sim_euler(dt_min, dt=dt_min, upper=upper)
         # get previous rate of change values
-        dSdt_n, dDdt_n, dNdt_n, dCldt_n, dCnldt_n = self.dxdt(self.time-1, upper=upper)
+        dSdt_n, dSddt_n, dDdt_n, dNdt_n, dCldt_n, dCnldt_n = self.dxdt(self.time-1, upper=upper)
         # get current rate of change values
-        dSdt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper=upper)
+        dSdt_n1, dSddt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper=upper)
         dt_old = dt_min # set up old time step variable
 
         while self.t[self.time] < T:
@@ -351,34 +351,43 @@ class NCell:
             for i in range(len(self.cells)): # iterate through cells and update values
                 curr_cell = self.cells[i]
 
-                if len(curr_cell.S) < self.time + 2: # check if we need to lengthen things
-                    curr_cell.S.append(0)
-                    curr_cell.D.append(0)
+                if len(curr_cell.N_bins) < self.time + 2: # check if we need to lengthen things
+                    for j in range(curr_cell.num_types):
+                        curr_cell.satellites[j].S.append(0)
+                        curr_cell.satellites[j].S_d.append(0)
+                        curr_cell.satellites[j].D.append(0)
                     curr_cell.N_bins.append(0)
                     curr_cell.C_l.append(0)
                     curr_cell.C_nl.append(0)
 
-                curr_cell.S[self.time+1] = curr_cell.S[self.time] + 0.5*dt*((2+dt/dt_old)*dSdt_n1[i]-(dt/dt_old)*dSdt_n[i])
-                curr_cell.D[self.time+1] = curr_cell.D[self.time] + 0.5*dt*((2+dt/dt_old)*dDdt_n1[i]-(dt/dt_old)*dDdt_n[i])
+                for j in range(curr_cell.num_types):
+                    curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + 0.5*dt*((2+dt/dt_old)*dSdt_n1[i][j]-(dt/dt_old)*dSdt_n[i][j])
+                    curr_cell.satellites[j].S_d[self.time+1] = curr_cell.satellites[j].S_d[self.time] + 0.5*dt*((2+dt/dt_old)*dSddt_n1[i][j]-(dt/dt_old)*dSddt_n[i][j])
+                    curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + 0.5*dt*((2+dt/dt_old)*dDdt_n1[i][j]-(dt/dt_old)*dDdt_n[i][j])
                 curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*dt*((2+dt/dt_old)*dNdt_n1[i]-(dt/dt_old)*dNdt_n[i])
                 curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + 0.5*dt*((2+dt/dt_old)*dCldt_n1[i]-(dt/dt_old)*dCldt_n[i])
                 curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + 0.5*dt*((2+dt/dt_old)*dCnldt_n1[i]-(dt/dt_old)*dCnldt_n[i])
             # get predicted rate of change from AB(2) method prediction
-            dSdt_n2, dDdt_n2, dNdt_n2, dCldt_n2, dCnldt_n2 = self.dxdt(self.time+1, upper=upper)
+            dSdt_n2, dSddt_n2, dDdt_n2, dNdt_n2, dCldt_n2, dCnldt_n2 = self.dxdt(self.time+1, upper=upper)
             # set up variable for step size checking
             epsilon = 0
             # re-do step using Trapezoid method
             for i in range(len(self.cells)): # iterate through cells and update values
                 curr_cell = self.cells[i]
-                old_S = curr_cell.S[self.time+1] # keep old values
-                old_D = curr_cell.D[self.time+1]
                 old_N = curr_cell.N_bins[self.time+1]
-                curr_cell.S[self.time+1] = curr_cell.S[self.time] + 0.5*(dSdt_n2[i]+dSdt_n1[i])*dt
-                if curr_cell.S[self.time] != 0:
-                    epsilon = max(np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.S[self.time+1]-old_S)), epsilon)
-                curr_cell.D[self.time+1] = curr_cell.D[self.time] + 0.5*(dDdt_n2[i]+dDdt_n1[i])*dt
-                if curr_cell.D[self.time] != 0:
-                    epsilon = max(np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.D[self.time+1]-old_D)), epsilon)
+                for j in range(curr_cell.num_types):
+                    old_S = curr_cell.satellites[j].S[self.time+1] # keep old values
+                    old_Sd = curr_cell.satellites[j].S_d[self.time+1]
+                    old_D = curr_cell.satellites[j].D[self.time+1]
+                    curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + 0.5*(dSdt_n2[i][j]+dSdt_n1[i][j])*dt
+                    if curr_cell.satellites[j].S[self.time] != 0:
+                        epsilon = max(np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.satellites[j].S[self.time+1]-old_S)), epsilon)
+                    curr_cell.satellites[j].S_d[self.time+1] = curr_cell.satellites[j].S_d[self.time] + 0.5*(dSddt_n2[i][j]+dSddt_n1[i][j])*dt
+                    if curr_cell.satellites[j].S_d[self.time] != 0:
+                        epsilon = max(np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.satellites[j].S_d[self.time+1]-old_Sd)), epsilon)
+                    curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + 0.5*(dDdt_n2[i][j]+dDdt_n1[i][j])*dt
+                    if curr_cell.satellites[j].D[self.time] != 0:
+                        epsilon = max(np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.satellites[j].D[self.time+1]-old_D)), epsilon)
                 curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*(dNdt_n2[i]+dNdt_n1[i])*dt
                 valid_choice = curr_cell.N_bins[self.time] != 0
                 if np.any(valid_choice) == True:
@@ -405,8 +414,9 @@ class NCell:
             self.time += 1
             dt = new_dt
             # update which are the old and new rates of change
-            dSdt_n, dDdt_n, dNdt_n, dCldt_n, dCnldt_n = dSdt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1
-            dSdt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
+            dSdt_n, dSddt_n, dDdt_n, dNdt_n, dCldt_n, dCnldt_n = dSdt_n1, dSddt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1
+            dSdt_n1, dSddt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
+
 
     def sim_colls(self, dNdt, rate, m_1, m_2, index):
         '''
