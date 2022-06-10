@@ -137,15 +137,15 @@ class NCell:
             # calculate decay paremeters for debris, initial debris values, and use those to make the N_factor_table
             N_initial, tau_N, N_factor_table = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi))
             # generate initial distributions
-            lethal_L = np.log10(randL_coll(N_l[i], 1e-1, L_max))
-            nlethal_L = np.log10(randL_coll(delta[i]*N_l[i], L_min, 1e-1))
+            lethal_L = np.log10(randL(N_l[i], 1e-1, L_max, 'coll'))
+            nlethal_L = np.log10(randL(delta[i]*N_l[i], L_min, 1e-1, 'coll'))
             for j in range(num_L):
                 bin_L = 0
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
                 ave_L = 10**((bin_bot_L+bin_top_L)/2)
                 bin_L += len(lethal_L[(bin_bot_L < lethal_L) & (lethal_L < bin_top_L)])
                 bin_L += len(nlethal_L[(bin_bot_L < nlethal_L) & (nlethal_L < bin_top_L)])
-                chi_dist = randX_coll(bin_L, chi_min, chi_max, ave_L)
+                chi_dist = randX(bin_L, chi_min, chi_max, ave_L, 'coll')
                 for k in range(num_chi):
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi + bin_top_chi)/2
@@ -194,16 +194,16 @@ class NCell:
             for j in range(self.num_L): # iterate through bins
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
                 ave_L = 10**((bin_bot_L+bin_top_L)/2)
-                curr_prob[:, j, :] = L_cdf(10**bin_top_L, L_min, L_max) - L_cdf(10**bin_bot_L, L_min, L_max) # probability of L being in this bin
+                curr_prob[:, j, :] = L_cdf(10**bin_top_L, L_min, L_max, 'coll') - L_cdf(10**bin_bot_L, L_min, L_max, 'coll') # probability of L being in this bin
                 for k in range(self.num_chi):
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi+bin_top_chi)/2
-                    curr_prob[:, j, k] *= X_cdf(bin_top_chi, chi_min, chi_max, ave_L) - X_cdf(bin_bot_chi, chi_min, chi_max, ave_L)
+                    curr_prob[:, j, k] *= X_cdf(bin_top_chi, chi_min, chi_max, ave_L, 'coll') - X_cdf(bin_bot_chi, chi_min, chi_max, ave_L, 'coll')
                     sum = 0
                     for l in range(num_dir): # sample random directions
                         if v_min2 < 0 and v_max2 < 0 : pass
-                        elif v_min2 < 0 : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), v0, theta[l], phi[l], ave_chi))
-                        else : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), theta[l], phi[l], v0, ave_chi) - vprime_cdf(np.sqrt(v_min2), v0, theta[l], phi[l], ave_chi))
+                        elif v_min2 < 0 : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), v0, theta[l], phi[l], ave_chi, 'coll'))
+                        else : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), theta[l], phi[l], v0, ave_chi, 'coll') - vprime_cdf(np.sqrt(v_min2), v0, theta[l], phi[l], ave_chi, 'coll'))
                     curr_prob[i,j,k] = sum/num_dir
             curr_prob[i,:,:] *= self.cells[cell_index].N_factor_table # only count relevant debris
 
@@ -439,7 +439,7 @@ class NCell:
         v_rel = self.cells[index].v # collision velocity (km/s)
         M = calc_M(m_1, m_2, v_rel) # M factor
         Lmin, Lmax = 10**self.logL_edges[0], 10**self.logL_edges[-1] # min and max characteristic lengths
-        N_debris = calc_Ntot_coll(M, Lmin, Lmax)*rate # total rate of debris creation
+        N_debris = calc_Ntot(M, Lmin, Lmax, 'coll')*rate # total rate of debris creation
         prob_table = self.probability_tables[index] # get right probability table
         for i in range(len(self.cells)): # iterate through cells to send debris to
             dNdt[i] += N_debris*prob_table[i, :, :]

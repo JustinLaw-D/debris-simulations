@@ -76,23 +76,32 @@ def calc_M(m_s, m_d, v):
     if E_p >= 40 : return m_s + m_d # catestrophic collision
     else : return m_d*v # non-catestrophic collision
 
-def calc_Ntot_coll(M, Lmin, Lmax):
+def calc_Ntot(M, Lmin, Lmax, typ):
     '''
     calculates the total number of debris produced with characteristic length
-    between Lmin and Lmax, for a collision
+    between Lmin and Lmax
 
     Parameter(s):
     M : fit parameter given by calc_M (variable units)
     Lmin : minimum characteristic length (m)
     Lmax : maximum characteristic length (m)
+    typ : one of 'coll' (collision) or 'expl' (explosion)
 
     Keyword Parameter(s): None
 
     Output(s):
     N : total number of fragments of Lmax > size > Lmin
-    '''
 
-    return 0.1*(M**0.75)*(Lmin**(-1.71)) - 0.1*(M**0.75)*(Lmax**(-1.71))
+    Note(s): TODO figure out how to calculate c. returns 0 on an invalid type
+    '''
+    def c():
+        return 1
+
+    if typ == 'coll' : return 0.1*(M**0.75)*(Lmin**(-1.71)) - 0.1*(M**0.75)*(Lmax**(-1.71))
+    elif typ == 'expl' : return 6*c()*(Lmin**(-1.6) - Lmax**(-1.6))
+    else:
+        print('WARNING: Invalid Debris Generation Type')
+        return 0
 
 def find_A(L):
     '''
@@ -110,76 +119,97 @@ def find_A(L):
     if L < 0.00167 : return 0.540424*(L**2)
     else : return 0.556945*(L**2.0047077)
 
-def L_cdf(L, L_min, L_max):
+def L_cdf(L, L_min, L_max, typ):
     '''
     calculates the cumulative distribution function for characteristic lengths
-    at length L, assuming the distribution is truncated at L_min and L_max
+    from a collision/explosion at length L, assuming the distribution is truncated 
+    at L_min and L_max
 
     Parameter(s):
     L : characteristic length (m)
     L_min : minimum characteristic length to consider (m)
     L_max : maximum characteristic length to consider (m)
+    typ : one of 'coll' (collision) or 'expl' (explosion)
 
     Keyword Parameter(s): None
 
     Output(s):
     P : value of CDF at L
+
+    Note(s): returns 0 on an invalid type
     '''
 
-    beta = -1.71
+    if typ == 'coll' : beta = -1.71
+    elif typ == 'expl' : beta = -1.6
+    else:
+        print('WARNING: Invalid Debris Generation Type')
+        return 0
     return (L_min**beta - L**beta)/(L_min**beta - L_max**beta)
 
-
-
-def randL_coll(num, L_min, L_max):
+def randL(num, L_min, L_max, typ):
     '''
-    generates num random characteristic lengths for debris from a collision
+    generates num random characteristic lengths for debris from a collision/explosion
 
     Parameter(s):
     num : number of random lengths to generate
     L_min : minimum characteristic length to consider (m)
     L_max : maximum characteristic length to consider (m)
+    typ : one of 'coll' (collision) or 'expl' (explosion)
 
     Keyword Parameter(s): None
 
     Output(s):
     L : array of random characteristic lengths (m)
+
+    Note(s): returns 0 on an invalid type
     '''
 
     lam_min, lam_max = np.log10(L_min), np.log10(L_max)
-    beta = -1.71
+    if typ == 'coll' : beta = -1.71
+    elif typ == 'expl' : beta = -1.6
+    else:
+        print('WARNING: Invalid Debris Generation Type')
+        return 0
     P = np.random.uniform(size=num) # get random P values
     lam = np.log10(10**(beta*lam_min) - P*(10**(beta*lam_min) - 10**(beta*lam_max)))/beta
     return 10**lam
 
-def X_cdf(x, x_min, x_max, L):
+def X_cdf(x, x_min, x_max, L, typ):
     '''
-    calculates the cumulative distribution function for log10(A/M) at value x
-    at length L, assuming the distribution is truncated at x_min and x_max
+    calculates the cumulative distribution function for log10(A/M) from a
+    collision/explosion at value x and length L, assuming the distribution
+    is truncated at x_min and x_max
 
     Parameter(s):
     x : log10(A/M) (log10(m^2/kg))
     x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
     x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
     L : characteristic length of the debris (m)
+    typ : one of 'coll' (collision) or 'expl' (explosion)
 
     Keyword Parameter(s): None
 
     Output(s):
     P : value of CDF at x, L
+
+    Note(s): returns 0 on an invalid type
     '''
 
-    if L >= 11/100 : return _X_cdf_11(x, x_min, x_max, L)
+    if typ != 'coll' and typ != 'expl':
+        print('WARNING: Invalid Debris Generation Type')
+        return 0
+    if L >= 11/100 : return _X_cdf_11(x, x_min, x_max, L, typ)
     elif L <= 8/100 : return _X_cdf_8(x, x_min, x_max, L)
     else:
         lam_min, lam_max = np.log10(8/100), np.log10(11/100)
         P = (np.log10(L)-lam_min)/(lam_max-lam_min)
-        return P*_X_cdf_11(x, x_min, x_max, L) + (1-P)*_X_cdf_8(x, x_min, x_max, L)
+        return P*_X_cdf_11(x, x_min, x_max, L, typ) + (1-P)*_X_cdf_8(x, x_min, x_max, L)
 
 def _X_cdf_8(x, x_min, x_max, L):
     '''
-    calculates the cumulative distribution function for log10(A/M) at value x
-    at length L<=8cm, assuming the distribution is truncated at x_min and x_max
+    calculates the cumulative distribution function for log10(A/M) from both collisions
+    and explosions at value x and length L<=8cm, assuming the distribution is truncated 
+    at x_min and x_max
 
     Parameter(s):
     x : log10(A/M) (log10(m^2/kg))
@@ -210,21 +240,25 @@ def _X_cdf_8(x, x_min, x_max, L):
     # compute total distribution
     return C*(erf((x-mu)/(np.sqrt(2)*sigma)) - erf((x_min-mu)/(np.sqrt(2)*sigma)))
 
-def _X_cdf_11(x, x_min, x_max, L):
+def _X_cdf_11(x, x_min, x_max, L, typ):
     '''
-    calculates the cumulative distribution function for log10(A/M) at value x
-    at length L>=11cm, assuming the distribution is truncated at x_min and x_max
+    calculates the cumulative distribution function for log10(A/M) from collisions/explosions 
+    at value x and length L>=11cm, assuming the distribution is truncated at x_min 
+    and x_max
 
     Parameter(s):
     x : log10(A/M) (log10(m^2/kg))
     x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
     x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
     L : characteristic length of the debris (m)
+    typ : one of 'coll' (collision) or 'expl' (explosion)
 
     Keyword Parameter(s): None
 
     Output(s):
     P : value of CDF at x, L
+
+    Note(s): returns 0 on an invalid type
     '''
     lam = np.log10(L)
 
@@ -253,12 +287,43 @@ def _X_cdf_11(x, x_min, x_max, L):
         if lambda_c <= -0.5 : return 0.5
         elif lambda_c < -0.3 : return 0.5 - (lambda_c + 0.5)
         else : return 0.3
+
+    def alpha_rb(lambda_c):
+            if lambda_c <= -1.4 : return 1
+            elif lambda_c < 0 : return 1 - 0.3571*(lambda_c + 1.4)
+            else : return 0.5
+
+    def mu1_rb(lambda_c):
+        if lambda_c <= -0.5 : return -0.45
+        elif lambda_c < 0 : return -0.45 - 0.9*(lambda_c + 0.5)
+        else : return -0.9
+
+    def sigma1_rb(lambda_c):
+        return 0.55
+
+    def mu2_rb(lambda_c):
+        return -0.9
+
+    def sigma2_rb(lambda_c):
+        if lambda_c <= -1 : return 0.28
+        elif lambda_c < 0.1 : return 0.28 - 0.1636*(lambda_c + 1)
+        else : return 0.1
     
-    mu1 = mu1_sc(lam) # calculate parameters
-    sigma1 = sigma1_sc(lam)
-    mu2 = mu2_sc(lam)
-    sigma2 = sigma2_sc(lam)
-    alpha = alpha_sc(lam)
+    if typ == 'coll':
+        mu1 = mu1_sc(lam) # calculate parameters
+        sigma1 = sigma1_sc(lam)
+        mu2 = mu2_sc(lam)
+        sigma2 = sigma2_sc(lam)
+        alpha = alpha_sc(lam)
+    elif typ == 'expl':
+        mu1 = mu1_rb(lam) # calculate parameters
+        sigma1 = sigma1_rb(lam)
+        mu2 = mu2_rb(lam)
+        sigma2 = sigma2_rb(lam)
+        alpha = alpha_rb(lam)
+    else:
+        print('WARNING: Invalid Debris Generation Type')
+        return 0
     # compute normalization factor
     top = alpha*erf((x_max-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_max-mu2)/(np.sqrt(2)*sigma2))
     bot = alpha*erf((x_min-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_min-mu2)/(np.sqrt(2)*sigma2))
@@ -267,35 +332,41 @@ def _X_cdf_11(x, x_min, x_max, L):
     fac_one = erf((x-mu1)/(np.sqrt(2)*sigma1)) - erf((x_min-mu1)/(np.sqrt(2)*sigma1))
     fac_two = erf((x-mu2)/(np.sqrt(2)*sigma2)) - erf((x_min-mu2)/(np.sqrt(2)*sigma2))
     return C*(alpha*fac_one + (1-alpha)*fac_two)
-    
 
-def randX_coll(num, x_min, x_max, L):
+def randX(num, x_min, x_max, L, typ):
     '''
-    generates num random log10(A/M) values for debris from a collision
+    generates num random log10(A/M) values for debris from a collision/explosion
 
     Parameter(s):
     num : number of random values to generate
     x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
     x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
     L : characteristic length of the debris (m)
+    typ : one of 'coll' (collision) or 'expl' (explosion)
 
     Keyword Parameter(s): None
 
     Output(s):
     x : array of random log10(A/M) values (log10(m^2/kg))
+
+    Note(s): returns 0 on an invalid type
     '''
 
-    if L >= 11/100 : return _randX_coll_11(num, x_min, x_max, L)
-    elif L <= 8/100 : return _randX_coll_8(num, x_min, x_max, L)
+    if typ != 'coll' and typ != 'expl':
+        print('WARNING: Invalid Debris Generation Type')
+        return 0
+    if L >= 11/100 : return _randX_11(num, x_min, x_max, L, typ)
+    elif L <= 8/100 : return _randX_8(num, x_min, x_max, L)
     else:
-        comp = 10*(np.log10(L) + 1.05)
-        if np.random.uniform() > comp : return _randX_coll_11(num, x_min, x_max, L)
-        else : return _randX_coll_8(num, x_min, x_max, L)
+        if typ == 'coll' : comp = 10*(np.log10(L) + 1.05)
+        else : 10*(np.log10(L) + 1.76)
+        if np.random.uniform() > comp : return _randX_11(num, x_min, x_max, L, typ)
+        else : return _randX_8(num, x_min, x_max, L)
 
-def _randX_coll_8(num, x_min, x_max, L):
+def _randX_8(num, x_min, x_max, L):
     '''
-    generates num random log10(A/M) values for debris from a collision, assuming that
-    the characteristic length of the debris is less than 8cm
+    generates num random log10(A/M) values for debris from a collision/explosion, 
+    assuming that the characteristic length of the debris is less than 8cm
 
     Parameter(s):
     num : number of random values to generate
@@ -329,21 +400,24 @@ def _randX_coll_8(num, x_min, x_max, L):
     x = sigma*np.sqrt(2)*erfinv(P/C + erf((x_min - mu)/(sigma*np.sqrt(2)))) + mu
     return x
 
-def _randX_coll_11(num, x_min, x_max, L):
+def _randX_11(num, x_min, x_max, L, typ):
     '''
-    generates num random log10(A/M) values for debris from a collision, assuming that
-    the characteristic length of the debris is greater than 11cm
+    generates num random log10(A/M) values for debris from a collision/explosion, 
+    assuming that the characteristic length of the debris is greater than 11cm
 
     Parameter(s):
     num : number of random values to generate
     x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
     x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
     L : characteristic length of the debris (m)
+    typ : one of 'coll' (collision) or 'expl' (explosion)
 
     Keyword Parameter(s): None
 
     Output(s):
     x : array of random log10(A/M) values (log10(m^2/kg))
+
+    Note(s): returns 0 on an invalid type
     '''
 
     lam = np.log10(L)
@@ -373,12 +447,43 @@ def _randX_coll_11(num, x_min, x_max, L):
         if lambda_c <= -0.5 : return 0.5
         elif lambda_c < -0.3 : return 0.5 - (lambda_c + 0.5)
         else : return 0.3
+
+    def alpha_rb(lambda_c):
+            if lambda_c <= -1.4 : return 1
+            elif lambda_c < 0 : return 1 - 0.3571*(lambda_c + 1.4)
+            else : return 0.5
+
+    def mu1_rb(lambda_c):
+        if lambda_c <= -0.5 : return -0.45
+        elif lambda_c < 0 : return -0.45 - 0.9*(lambda_c + 0.5)
+        else : return -0.9
+
+    def sigma1_rb(lambda_c):
+        return 0.55
+
+    def mu2_rb(lambda_c):
+        return -0.9
+
+    def sigma2_rb(lambda_c):
+        if lambda_c <= -1 : return 0.28
+        elif lambda_c < 0.1 : return 0.28 - 0.1636*(lambda_c + 1)
+        else : return 0.1
     
-    mu1 = mu1_sc(lam) # calculate parameters
-    sigma1 = sigma1_sc(lam)
-    mu2 = mu2_sc(lam)
-    sigma2 = sigma2_sc(lam)
-    alpha = alpha_sc(lam)
+    if typ == 'coll':
+        mu1 = mu1_sc(lam) # calculate parameters
+        sigma1 = sigma1_sc(lam)
+        mu2 = mu2_sc(lam)
+        sigma2 = sigma2_sc(lam)
+        alpha = alpha_sc(lam)
+    elif typ == 'expl':
+        mu1 = mu1_rb(lam) # calculate parameters
+        sigma1 = sigma1_rb(lam)
+        mu2 = mu2_rb(lam)
+        sigma2 = sigma2_rb(lam)
+        alpha = alpha_rb(lam)
+    else:
+        print('WARNING: Invalid Debris Generation Type')
+        return 0
     # compute normalization factor
     top = alpha*erf((x_max-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_max-mu2)/(np.sqrt(2)*sigma2))
     bot = alpha*erf((x_min-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_min-mu2)/(np.sqrt(2)*sigma2))
@@ -394,27 +499,34 @@ def _randX_coll_11(num, x_min, x_max, L):
         x[i] = x_table[index] # use this to find the corresponding x-value
     return x
 
-def v_cdf(v, x):
+def v_cdf(v, x, typ):
     '''
     evaluates cdf for log10(Delta v) values at given v and x
 
     Parameter(s):
     v : log10(delta v) value to evaluate at (log10(m/s))
     x : log10(A/M) value of the debris (log10(m^2/kg))
+    typ : one of 'coll' (collision) or 'expl' (explosion)
 
     Keyword Parameter(s): None
 
     Output(s):
     P : value of the CDF at v, x
-    '''
 
-    mu = 0.9*x + 2.9 # calculate normal distribution parameters
+    Note(s): returns 0 on an invalid type
+    '''
+    
+    if typ == 'coll' : mu = 0.9*x + 2.9 # calculate normal distribution parameters
+    elif typ == 'expl' : mu = 0.2*x + 1.85
+    else:
+        print('WARNING: Invalid Debris Generation Type')
+        return 0
     sigma_fac = 0.4*np.sqrt(2)
     C = 1/2 # calculate normalization factor
     # calculate CDF value
     return C*(erf((v-mu)/sigma_fac) + 1)
 
-def vprime_cdf(V, v0, theta, phi, x):
+def vprime_cdf(V, v0, theta, phi, x, typ):
     '''
     evaluates cdf for the post-collision speed V, given a pre-collision
     orbital speed v0, post-collision direction of (theta, phi), and x
@@ -427,11 +539,14 @@ def vprime_cdf(V, v0, theta, phi, x):
     theta : inclination angle (rad)
     phi : azimuthal angle (rad)
     x : log10(A/M) value of the debris (log10(m^2/kg))
+    typ : one of 'coll' (collision) or 'expl' (explosion)
 
     Keyword Parameter(s): None
 
     Output(s):
     P : value of the CDF at V
+
+    Note(s): returns 0 on an invalid type
     '''
     
     descriminate = (v0*np.sin(theta)*np.cos(phi))**2 - (v0**2-V**2)
@@ -439,25 +554,32 @@ def vprime_cdf(V, v0, theta, phi, x):
     del_v_max = -v0*np.sin(theta)*np.cos(phi) + np.sqrt(descriminate)
     del_v_min = -v0*np.sin(theta)*np.cos(phi) - np.sqrt(descriminate)
     if del_v_max < 0 : return 0 # cannot get a post-collision velocity this low
-    elif del_v_min <= 0 : return v_cdf(np.log10(del_v_max), x)
-    else : return v_cdf(np.log10(del_v_max), x) - v_cdf(np.log10(del_v_min), x)
+    elif del_v_min <= 0 : return v_cdf(np.log10(del_v_max), x, typ)
+    else : return v_cdf(np.log10(del_v_max), x, typ) - v_cdf(np.log10(del_v_min), x, typ)
 
 
-def randv_coll(num, x):
+def randv(num, x, typ):
     '''
-    generates num random log10(Delta v) values for debris from a collision
+    generates num random log10(Delta v) values for debris from a collision/explosion
 
     Parameter(s):
     num : number of random values to generate
     x : log10(A/M) value of the debris (log10(m^2/kg))
+    typ : one of 'coll' (collision) or 'expl' (explosion)
 
     Keyword Parameter(s): None
 
     Output(s):
     v : array of random log10(Delta v) values (log10(m/s))
+
+    Note(s): returns 0 on an invalid type
     '''
 
-    mu = 0.9*x + 2.9 # calculate normal distribution parameters
+    if typ == 'coll' : mu = 0.9*x + 2.9 # calculate normal distribution parameters
+    elif typ == 'expl' : mu = 0.2*x + 1.85
+    else:
+        print('WARNING: Invalid Debris Generation Type')
+        return 0
     sigma_fac = 0.4*np.sqrt(2)
     C = 1/2 # calculate normalization factor
     P = np.random.uniform(size=num) # get random P values
