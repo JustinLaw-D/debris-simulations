@@ -1,4 +1,4 @@
-# contains class for collection of cells representing orbital shells
+# contains class for collection of cells representing orbital shells, and discrete events
 
 from Cell import *
 import numpy as np
@@ -604,3 +604,170 @@ class NCell:
             if (alt - dh/2 <= h) and (alt + dh/2 >= h):
                 return i
         return -1
+
+class Event:
+    
+    def __init__(self, alt, time=None, freq=None):
+        '''
+        constructor for general event class
+
+        Paremeter(s):
+        alt : altitude of the event (km)
+
+        Keyword Parameter(s):
+        time : list of times that the event occurs (yr, default None)
+        freq : frequency the event occurs at (1/yr, default None)
+
+        Output(s): instance of Event
+
+        Note(s): time and freq cannot both be None
+        '''
+
+        if time == None and freq == None:
+            print('Invlid Event : No occurance time specified')
+
+        self.time = time
+        self.last_event = 0 # time of the last event (yr)
+        self.freq = freq
+        self.alt = alt
+
+    def run_event(self, S, S_d, D, N, logL_edges, chi_edges):
+        '''
+        function representing the discrete event occuring
+
+        Input(s):
+        S : number of live satellites in the current cell
+        S_d : number of de-orbiting satellites in the current cell
+        D : number of derelict satellites in the current cell
+        N : binned amount of debris in current cell (2d array)
+        logL_edges : logL edge values for the bins (log10(m))
+        chi_edges : chi edge values for the bins (log10(m^2/kg))
+
+        Keyword Input(s): None
+
+        Output(s):
+        dS : change in the number of live satellites in the current cell
+        dS_d : change in the number of de-orbiting satellites in the current cell
+        dD : change in the number of derelict satellites in the cell
+        dN : change in the number of debris in the curren cell, not including debris
+             produced by collisions
+        coll : list of collisions occuring in the current cell in the form [(kg, kg, #)],
+               i.e. [(m1, m2, number of collisions)]
+        expl : list of explosions occuring in the current cell in the form [(C, #)], where
+               C is the relevant fit constant
+
+        Note(s): this function is meant to be overwritten, and in the default form just returns
+                 zero
+        '''
+
+        return 0, 0, 0, 0, 0, 0
+
+# class for handling basic explosions
+class ExplEvent(Event):
+    
+    def __init__(self, alt, expl_list, time=None, freq=None):
+        '''
+        constructor for a basic explosions event class
+
+        Paremeter(s):
+        alt : altitude of the event (km)
+        expl_list : list of explosions occuring in the current cell during the event 
+                    in the form [(C, #)], where C is the relevant fit constant
+
+        Keyword Parameter(s):
+        time : list of times that the event occurs (yr, default None)
+        freq : frequency the event occurs at (1/yr, default None)
+
+        Output(s): instance of Event
+
+        Note(s): time and freq cannot both be None
+        '''
+
+        super().__init__(alt, time=time, freq=freq)
+        self.expl_list = expl_list
+
+    def run_event(self, S, S_d, D, N, logL_edges, chi_edges):
+        '''
+        function representing the discrete event occuring
+
+        Input(s):
+        S : number of live satellites in the current cell
+        S_d : number of de-orbiting satellites in the current cell
+        D : number of derelict satellites in the current cell
+        N : binned amount of debris in current cell (2d array)
+        logL_edges : logL edge values for the bins (log10(m))
+        chi_edges : chi edge values for the bins (log10(m^2/kg))
+
+        Keyword Input(s): None
+
+        Output(s):
+        dS : change in the number of live satellites in the current cell
+        dS_d : change in the number of de-orbiting satellites in the current cell
+        dD : change in the number of derelict satellites in the cell
+        dN : change in the number of debris in the curren cell, not including debris
+             produced by collisions
+        coll : list of collisions occuring in the current cell in the form [(kg, kg, #)],
+               i.e. [(m1, m2, number of collisions)]
+        expl : list of explosions occuring in the current cell in the form [(C, #)], where
+               C is the relevant fit constant
+
+        Note(s): this function is meant to be overwritten, and in the default form just returns
+                 zero
+        '''
+
+        return 0, 0, 0, 0, 0, self.expl_list
+
+# class for handling basic collisions
+class CollEvent(Event):
+    
+    def __init__(self, alt, coll_list, time=None, freq=None):
+        '''
+        constructor for a basic collisions event class
+
+        Paremeter(s):
+        alt : altitude of the event (km)
+        coll_list : list of collisions occuring on an event in the current cell 
+                    in the form [(kg, kg, #)], i.e. [(m1, m2, number of collisions)]
+
+        Keyword Parameter(s):
+        time : list of times that the event occurs (yr, default None)
+        freq : frequency the event occurs at (1/yr, default None)
+
+        Output(s): instance of Event
+
+        Note(s): time and freq cannot both be None
+        '''
+
+        super().__init__(alt, time=time, freq=freq)
+        self.coll_list = coll_list
+
+    def run_event(self, S, S_d, D, N, logL_edges, chi_edges):
+        '''
+        function representing the discrete event occuring
+
+        Input(s):
+        S : number of live satellites in the current cell
+        S_d : number of de-orbiting satellites in the current cell
+        D : number of derelict satellites in the current cell
+        N : binned amount of debris in current cell (2d array)
+        logL_edges : logL edge values for the bins (log10(m))
+        chi_edges : chi edge values for the bins (log10(m^2/kg))
+
+        Keyword Input(s): None
+
+        Output(s):
+        dS : change in the number of live satellites in the current cell
+        dS_d : change in the number of de-orbiting satellites in the current cell
+        dD : change in the number of derelict satellites in the cell
+        dN : change in the number of debris in the curren cell, not including debris
+             produced by collisions
+        coll : list of collisions occuring in the current cell in the form [(kg, kg, #)],
+               i.e. [(m1, m2, number of collisions)]
+        expl : list of explosions occuring in the current cell in the form [(C, #)], where
+               C is the relevant fit constant
+
+        Note(s): this function is meant to be overwritten, and in the default form just returns
+                 zero
+        '''
+
+        return 0, 0, 0, 0, self.coll_list, 0
