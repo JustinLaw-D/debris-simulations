@@ -184,7 +184,7 @@ def X_cdf(x, x_min, x_max, L, typ):
     x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
     x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
     L : characteristic length of the debris (m)
-    typ : one of 'coll' (collision) or 'expl' (explosion)
+    typ : one of 'sat' (satellite) or 'rb' (rocket body)
 
     Keyword Parameter(s): None
 
@@ -194,8 +194,8 @@ def X_cdf(x, x_min, x_max, L, typ):
     Note(s): returns 0 on an invalid type
     '''
 
-    if typ != 'coll' and typ != 'expl':
-        print('WARNING: Invalid Debris Generation Type')
+    if typ != 'sat' and typ != 'rb':
+        print('WARNING: Invalid Debris Generator Type')
         return 0
     if L >= 11/100 : return _X_cdf_11(x, x_min, x_max, L, typ)
     elif L <= 8/100 : return _X_cdf_8(x, x_min, x_max, L)
@@ -250,7 +250,7 @@ def _X_cdf_11(x, x_min, x_max, L, typ):
     x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
     x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
     L : characteristic length of the debris (m)
-    typ : one of 'coll' (collision) or 'expl' (explosion)
+    typ : one of 'sat' (satellite) or 'rb' (rocket body)
 
     Keyword Parameter(s): None
 
@@ -308,20 +308,20 @@ def _X_cdf_11(x, x_min, x_max, L, typ):
         elif lambda_c < 0.1 : return 0.28 - 0.1636*(lambda_c + 1)
         else : return 0.1
     
-    if typ == 'coll':
+    if typ == 'sat':
         mu1 = mu1_sc(lam) # calculate parameters
         sigma1 = sigma1_sc(lam)
         mu2 = mu2_sc(lam)
         sigma2 = sigma2_sc(lam)
         alpha = alpha_sc(lam)
-    elif typ == 'expl':
+    elif typ == 'rb':
         mu1 = mu1_rb(lam) # calculate parameters
         sigma1 = sigma1_rb(lam)
         mu2 = mu2_rb(lam)
         sigma2 = sigma2_rb(lam)
         alpha = alpha_rb(lam)
     else:
-        print('WARNING: Invalid Debris Generation Type')
+        print('WARNING: Invalid Debris Generator Type')
         return 0
     # compute normalization factor
     top = alpha*erf((x_max-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_max-mu2)/(np.sqrt(2)*sigma2))
@@ -341,7 +341,7 @@ def randX(num, x_min, x_max, L, typ):
     x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
     x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
     L : characteristic length of the debris (m)
-    typ : one of 'coll' (collision) or 'expl' (explosion)
+    typ : one of 'sat' (satellite) or 'rb' (rocket body)
 
     Keyword Parameter(s): None
 
@@ -351,13 +351,13 @@ def randX(num, x_min, x_max, L, typ):
     Note(s): returns 0 on an invalid type
     '''
 
-    if typ != 'coll' and typ != 'expl':
-        print('WARNING: Invalid Debris Generation Type')
+    if typ != 'sat' and typ != 'rb':
+        print('WARNING: Invalid Debris Generator Type')
         return 0
     if L >= 11/100 : return _randX_11(num, x_min, x_max, L, typ)
     elif L <= 8/100 : return _randX_8(num, x_min, x_max, L)
     else:
-        if typ == 'coll' : comp = 10*(np.log10(L) + 1.05)
+        if typ == 'sat' : comp = 10*(np.log10(L) + 1.05)
         else : 10*(np.log10(L) + 1.76)
         if np.random.uniform() > comp : return _randX_11(num, x_min, x_max, L, typ)
         else : return _randX_8(num, x_min, x_max, L)
@@ -409,7 +409,7 @@ def _randX_11(num, x_min, x_max, L, typ):
     x_min : minimum log10(A/M) value to consider (log10(m^2/kg))
     x_max : maximum log10(A/M) value to consider (log10(m^2/kg))
     L : characteristic length of the debris (m)
-    typ : one of 'coll' (collision) or 'expl' (explosion)
+    typ : one of 'sat' (satellite) or 'rb' (rocket body)
 
     Keyword Parameter(s): None
 
@@ -468,20 +468,20 @@ def _randX_11(num, x_min, x_max, L, typ):
         elif lambda_c < 0.1 : return 0.28 - 0.1636*(lambda_c + 1)
         else : return 0.1
     
-    if typ == 'coll':
+    if typ == 'sat':
         mu1 = mu1_sc(lam) # calculate parameters
         sigma1 = sigma1_sc(lam)
         mu2 = mu2_sc(lam)
         sigma2 = sigma2_sc(lam)
         alpha = alpha_sc(lam)
-    elif typ == 'expl':
+    elif typ == 'rb':
         mu1 = mu1_rb(lam) # calculate parameters
         sigma1 = sigma1_rb(lam)
         mu2 = mu2_rb(lam)
         sigma2 = sigma2_rb(lam)
         alpha = alpha_rb(lam)
     else:
-        print('WARNING: Invalid Debris Generation Type')
+        print('WARNING: Invalid Debris Generator Type')
         return 0
     # compute normalization factor
     top = alpha*erf((x_max-mu1)/(np.sqrt(2)*sigma1)) + (1-alpha)*erf((x_max-mu2)/(np.sqrt(2)*sigma2))
