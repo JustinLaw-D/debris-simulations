@@ -213,7 +213,7 @@ class Cell:
                 else : tot_R_coll += 2*dRRdt[i,j]
 
             # sum everything up
-            dRdt_tot.append(lam - np.sum(dRdt[i]) - tot_R_coll)
+            dRdt_tot.append(lam + R_in - np.sum(dRdt[i]) - tot_R_coll)
             CR_dt.append(dRdt[i])
 
         # calculate rates of decay for debris

@@ -95,7 +95,7 @@ class Event:
         self.freq = freq
         self.alt = alt
 
-    def run_event(self, S, S_d, D, N, logL_edges, chi_edges):
+    def run_event(self, S, S_d, D, R, N, logL_edges, chi_edges):
         '''
         function representing the discrete event occuring
 
@@ -103,6 +103,7 @@ class Event:
         S : number of live satellites of each type in the current cell (list of floats)
         S_d : number of de-orbiting satellites of each type in the current cell (list of floats)
         D : number of derelict satellites of each type in the current cell (list of floats)
+        R : number of rocket bodies of each type in the current cell (list of floats)
         N : binned amount of debris in current cell (2d array)
         logL_edges : logL edge values for the bins (log10(m))
         chi_edges : chi edge values for the bins (log10(m^2/kg))
@@ -110,13 +111,15 @@ class Event:
         Keyword Input(s): None
 
         Output(s):
-        dS : change in the number of live satellites of each type in the current cell (list of floats)
-        dS_d : change in the number of de-orbiting satellites of each type in the current cell (list of floats)
-        dD : change in the number of derelict satellites of each type in the cell (list of floats)
+        dS : change in the number of live satellites of each type in the current cell (array of floats)
+        dS_d : change in the number of de-orbiting satellites of each type in the current cell (array of floats)
+        dD : change in the number of derelict satellites of each type in the cell (array of floats)
+        dR : change in the number of rocket bodies of each type in the cell (array of floats)
         dN : change in the number of debris in the curren cell, not including debris
              produced by collisions
-        coll : list of collisions occuring in the current cell in the form [(kg, kg, #)],
-               i.e. [(m1, m2, number of collisions)]
+        coll : list of collisions occuring in the current cell in the form [(kg, kg, typ, #)],
+               i.e. [(m1, m2, typ, number of collisions)]. typ can be one of 'sat' (satellite-satellite),
+               'sr' (satellite-rocket, where satellite is m1), or 'rb' (rocket-rocket)
         expl : list of explosions occuring in the current cell in the form [(C, typ, #)], where
                C is the relevant fit constant and typ is the type of body exploding ('sat' or 'rb)
 
@@ -124,7 +127,7 @@ class Event:
                  zero
         '''
 
-        return 0, 0, 0, 0, 0, 0
+        return 0, 0, 0, 0, 0, 0, 0
 
 # class for handling basic explosions
 class ExplEvent(Event):
@@ -150,7 +153,7 @@ class ExplEvent(Event):
         super().__init__(alt, time=time, freq=freq)
         self.expl_list = expl_list
 
-    def run_event(self, S, S_d, D, N, logL_edges, chi_edges):
+    def run_event(self, S, S_d, D, R, N, logL_edges, chi_edges):
         '''
         function representing the discrete event occuring
 
@@ -158,6 +161,7 @@ class ExplEvent(Event):
         S : number of live satellites of each type in the current cell (list of floats)
         S_d : number of de-orbiting satellites of each type in the current cell (list of floats)
         D : number of derelict satellites of each type in the current cell (list of floats)
+        R : number of rocket bodies of each type in the current cell (list of floats)
         N : binned amount of debris in current cell (2d array)
         logL_edges : logL edge values for the bins (log10(m))
         chi_edges : chi edge values for the bins (log10(m^2/kg))
@@ -165,13 +169,15 @@ class ExplEvent(Event):
         Keyword Input(s): None
 
         Output(s):
-        dS : change in the number of live satellites of each type in the current cell (list of floats)
-        dS_d : change in the number of de-orbiting satellites of each type in the current cell (list of floats)
-        dD : change in the number of derelict satellites of each type in the cell (list of floats)
+        dS : change in the number of live satellites of each type in the current cell (array of floats)
+        dS_d : change in the number of de-orbiting satellites of each type in the current cell (array of floats)
+        dD : change in the number of derelict satellites of each type in the cell (array of floats)
+        dR : change in the number of rocket bodies of each type in the cell (array of floats)
         dN : change in the number of debris in the curren cell, not including debris
              produced by collisions
-        coll : list of collisions occuring in the current cell in the form [(kg, kg, #)],
-               i.e. [(m1, m2, number of collisions)]
+        coll : list of collisions occuring in the current cell in the form [(kg, kg, typ, #)],
+               i.e. [(m1, m2, typ, number of collisions)]. typ can be one of 'sat' (satellite-satellite),
+               'sr' (satellite-rocket, where satellite is m1), or 'rb' (rocket-rocket)
         expl : list of explosions occuring in the current cell in the form [(C, typ, #)], where
                C is the relevant fit constant and typ is the type of body exploding ('sat' or 'rb)
 
@@ -179,7 +185,7 @@ class ExplEvent(Event):
                  zero
         '''
 
-        return 0, 0, 0, 0, 0, self.expl_list
+        return 0, 0, 0, 0, 0, 0, self.expl_list
 
 # class for handling basic collisions
 class CollEvent(Event):
@@ -190,8 +196,9 @@ class CollEvent(Event):
 
         Paremeter(s):
         alt : altitude of the event (km)
-        coll_list : list of collisions occuring on an event in the current cell 
-                    in the form [(kg, kg, #)], i.e. [(m1, m2, number of collisions)]
+        coll_list : list of collisions occuring in the current cell in the form [(kg, kg, typ, #)],
+                    i.e. [(m1, m2, typ, number of collisions)]. typ can be one of 'sat' (satellite-satellite),
+                    'sr' (satellite-rocket, where satellite is m1), or 'rb' (rocket-rocket)
 
         Keyword Parameter(s):
         time : list of times that the event occurs (yr, default None)
@@ -205,14 +212,15 @@ class CollEvent(Event):
         super().__init__(alt, time=time, freq=freq)
         self.coll_list = coll_list
 
-    def run_event(self, S, S_d, D, N, logL_edges, chi_edges):
+    def run_event(self, S, S_d, D, R, N, logL_edges, chi_edges):
         '''
         function representing the discrete event occuring
 
         Input(s):
-        dS : change in the number of live satellites of each type in the current cell (list of floats)
-        dS_d : change in the number of de-orbiting satellites of each type in the current cell (list of floats)
-        dD : change in the number of derelict satellites of each type in the cell (list of floats)
+        S : number of live satellites of each type in the current cell (list of floats)
+        S_d : number of de-orbiting satellites of each type in the current cell (list of floats)
+        D : number of derelict satellites of each type in the current cell (list of floats)
+        R : number of rocket bodies of each type in the current cell (list of floats)
         N : binned amount of debris in current cell (2d array)
         logL_edges : logL edge values for the bins (log10(m))
         chi_edges : chi edge values for the bins (log10(m^2/kg))
@@ -220,13 +228,15 @@ class CollEvent(Event):
         Keyword Input(s): None
 
         Output(s):
-        dS : change in the number of live satellites in the current cell
-        dS_d : change in the number of de-orbiting satellites in the current cell
-        dD : change in the number of derelict satellites in the cell
+        dS : change in the number of live satellites in the current cell (array of floats)
+        dS_d : change in the number of de-orbiting satellites in the current cell (array of floats)
+        dD : change in the number of derelict satellites in the cell (array of floats)
+        dR : change in the number of rocket bodies of each type in the cell (array of floats)
         dN : change in the number of debris in the curren cell, not including debris
              produced by collisions
-        coll : list of collisions occuring in the current cell in the form [(kg, kg, #)],
-               i.e. [(m1, m2, number of collisions)]
+        coll : list of collisions occuring in the current cell in the form [(kg, kg, typ, #)],
+               i.e. [(m1, m2, typ, number of collisions)]. typ can be one of 'sat' (satellite-satellite),
+               'sr' (satellite-rocket, where satellite is m1), or 'rb' (rocket-rocket)
         expl : list of explosions occuring in the current cell in the form [(C, typ, #)], where
                C is the relevant fit constant and typ is the type of body exploding ('sat' or 'rb)
 
@@ -234,4 +244,4 @@ class CollEvent(Event):
                  zero
         '''
 
-        return 0, 0, 0, 0, self.coll_list, 0
+        return 0, 0, 0, 0, 0, self.coll_list, 0

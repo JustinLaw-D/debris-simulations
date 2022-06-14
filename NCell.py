@@ -1,5 +1,6 @@
 # contains class for collection of cells representing orbital shells
 
+from ipaddress import collapse_addresses
 from Cell import *
 from ObjectsEvents import *
 import numpy as np
@@ -279,6 +280,7 @@ class NCell:
         dSdt : list of rates of change in S for each cell (1/yr)
         dS_ddt : list of rates of change in S_d for each cell (1/yr)
         dDdt : list of rates of change in D for each cell (1/yr)
+        dRdt : list of rates of change in R for each cell (1/yr)
         dNdt : list of rates of change in the N matrix for each cell (1/yr)
         dCldt : list of rates of change in C_l for each cell (1/yr)
         dCnldt : list of rates of change in C_nl for each cell (1/yr)
@@ -287,25 +289,35 @@ class NCell:
         '''
 
         top_cell = self.cells[-1]
-        num_types = top_cell.num_types
+        num_sat_types = top_cell.num_sat_types
+        num_rb_types = top_cell.num_rb_types
         top_Nin = self.upper_N/top_cell.tau_N # debris going into top cell
         dSdt = [] # array of changes in satallite values
         dS_ddt = [] # array of changes in de-orbiting values
         dDdt = [] # array of changes in derelict values
+        dRdt = [] # array of changes in rocket body values
         dNdt = [] # array of changes in debris values
-        sat_coll = []
-        N_coll = [] # array of collision values
+        sat_coll = [] # array of satellite-satellite collisions
+        RS_coll = [] # array of rocket-satellite collisions
+        R_coll = [] # array of rocket-rocket collisions
+        NS_coll = [] # array of collision values for satellites
+        NR_coll = [] # array of collision values for rockets
         for i in range(len(self.cells)):
             dSdt.append([])
             dS_ddt.append([])
             dDdt.append([])
+            dRdt.append([])
             dNdt.append(np.zeros((self.num_L, self.num_chi)))
-            sat_coll.append(np.zeros((num_types, num_types)))
-            N_coll.append([])
+            sat_coll.append(np.zeros((num_sat_types, num_sat_types)))
+            RS_coll.append(np.zeros((num_sat_types, num_rb_types)))
+            R_coll.append(np.zeros((num_rb_types, num_rb_types)))
+            NS_coll.append([])
+            NR_coll.append([])
 
         # get initial D_in, N_in values
-        S_din = np.zeros(num_types)
-        D_in = np.zeros(num_types)
+        S_din = np.zeros(num_sat_types)
+        D_in = np.zeros(num_sat_types)
+        R_in = np.zeros(num_rb_types)
         N_in  = np.zeros((self.num_L, self.num_chi))
         if upper : N_in = top_Nin
 
@@ -313,40 +325,64 @@ class NCell:
         for i in range(-1, (-1)*(len(self.cells) + 1), -1):
             curr_cell = self.cells[i]
             dNdt[i] += N_in
-            dSdt[i], dS_ddt[i], dDdt[i], S_din, D_in, N_in, sat_coll[i], N_coll[i] = curr_cell.dxdt_cell(time, S_din, D_in)
+            dSdt[i], dS_ddt[i], dDdt[i], dRdt[i], S_din, D_in, R_in, N_in, sat_coll[i], RS_coll[i], R_coll[i], NS_coll[i], NR_coll[i] = curr_cell.dxdt_cell(time, S_din, D_in, R_in)
             dNdt[i] -= N_in # loses debris decaying outs
             # simulate collisions
-            for j in range(num_types): # iterate through satellite types
+            for j in range(num_sat_types): # iterate through satellite types
 
                 m_s1 = curr_cell.satellites[j].m
-                for k in range(j+1, num_types): # satellite-satellite collisions
+                for k in range(j+1, num_sat_types): # satellite-satellite collisions
                     m_s2 = curr_cell.satellites[k].m
-                    self.sim_colls(dNdt, sat_coll[i][j,k] + sat_coll[i][k,j], m_s1, m_s2, i)
-                self.sim_colls(dNdt, sat_coll[i][j,j], m_s1, m_s1, i) # collisions between satellites of same type
-                
+                    self.sim_colls(dNdt, sat_coll[i][j,k] + sat_coll[i][k,j], m_s1, m_s2, i, 'sat')
+                self.sim_colls(dNdt, sat_coll[i][j,j], m_s1, m_s1, i, 'sat') # collisions between satellites of same type
+
+                for k in range(num_rb_types): # satellite-rb collisions
+                    m_rb2 = curr_cell.rockets[k].m
+                    self.sim_colls_satrb(dNdt, RS_coll[i][j,k], m_s1, i, 'sat')
+                    self.sim_colls_satrb(dNdt, RS_coll[i][j,k], m_rb2, i, 'rb')
+
                 for k in range(self.num_L): # satellite-debris collisions
                     ave_L = 10**((self.logL_edges[k] + self.logL_edges[k+1])/2)
                     for l in range(self.num_chi):
                         ave_AM = 10**((self.chi_edges[l] + self.chi_edges[l+1])/2)
                         m_d = find_A(ave_L)/ave_AM
-                        self.sim_colls(dNdt, N_coll[i][j][k,l], m_s1, m_d, i)
+                        self.sim_colls(dNdt, NS_coll[i][j][k,l], m_s1, m_d, i, 'sat')
+
+            for j in range(num_rb_types): # iterate through rocket body types
+
+                m_rb1 = curr_cell.rockets[j].m
+                for k in range(j+1, num_rb_types): # rocket-rocket collisions
+                    m_rb2 = curr_cell.rockets[k].m
+                    self.sim_colls(dNdt, R_coll[i][j,k] + R_coll[i][k,j], m_rb1, m_rb2, i, 'rb')
+                self.sim_colls(dNdt, R_coll[i][j,j], m_rb1, m_rb1, i, 'rb') # collisions between rockets of same type
+
+                for k in range(self.num_L): # rocket-debris collisions
+                    ave_L = 10**((self.logL_edges[k] + self.logL_edges[k+1])/2)
+                    for l in range(self.num_chi):
+                        ave_AM = 10**((self.chi_edges[l] + self.chi_edges[l+1])/2)
+                        m_d = find_A(ave_L)/ave_AM
+                        self.sim_colls(dNdt, NR_coll[i][j][k,l], m_rb1, m_d, i, 'rb')
                     
             # add on debris lost to collisions
-            dNdt[i] -= sum(N_coll[i])
+            dNdt[i] -= sum(NS_coll[i] + NR_coll[i])
 
         # update values
         dCldt = []
         dCnldt = []
         for i in range(len(self.cells)):
             curr_cell = self.cells[i]
-            dCldt.append(np.sum(sat_coll[i]))
+            dCldt.append(np.sum(sat_coll[i]) + np.sum(RS_coll[i]) + np.sum(R_coll[i]))
             dCnldt.append(0)
-            for j in range(num_types):
-                lethal_table = curr_cell.lethal_N[j]
-                dCldt[i] += np.sum(sum(N_coll[i])[lethal_table==True])
-                dCnldt[i] += np.sum(sum(N_coll[i])[lethal_table==False])
+            for j in range(num_sat_types):
+                lethal_table = curr_cell.lethal_sat_N[j]
+                dCldt[i] += np.sum(sum(NS_coll[i])[lethal_table==True])
+                dCnldt[i] += np.sum(sum(NS_coll[i])[lethal_table==False])
+            for j in range(num_rb_types):
+                lethal_table = curr_cell.lethal_rb_N[j]
+                dCldt[i] += np.sum(sum(NR_coll[i])[lethal_table==True])
+                dCnldt[i] += np.sum(sum(NR_coll[i])[lethal_table==False])
 
-        return dSdt, dS_ddt, dDdt, dNdt, dCldt, dCnldt
+        return dSdt, dS_ddt, dDdt, dRdt, dNdt, dCldt, dCnldt
 
     def run_sim_euler(self, T, dt=1, upper=True):
         '''
@@ -362,19 +398,24 @@ class NCell:
         Output(s): None
         '''
 
+        self.run_events() # run initial discrete events
+
         while self.t[self.time] < T:
-            dSdt, dS_ddt, dDdt, dNdt, dCldt, dCnldt = self.dxdt(self.time, upper) # get current rates of change
+            dSdt, dS_ddt, dDdt, dRdt, dNdt, dCldt, dCnldt = self.dxdt(self.time, upper) # get current rates of change
             for i in range(len(self.cells)): # iterate through cells and update values
                 curr_cell = self.cells[i]
                 curr_cell.N_bins.append(curr_cell.N_bins[self.time] + dNdt[i]*dt)
                 curr_cell.C_l.append(curr_cell.C_l[self.time] + dCldt[i]*dt)
                 curr_cell.C_nl.append(curr_cell.C_nl[self.time] + dCnldt[i]*dt)
-                for j in range(curr_cell.num_types):
+                for j in range(curr_cell.num_sat_types):
                     curr_cell.satellites[j].S.append(curr_cell.satellites[j].S[self.time] + dSdt[i][j]*dt)
                     curr_cell.satellites[j].S_d.append(curr_cell.satellites[j].S_d[self.time] + dS_ddt[i][j]*dt)
                     curr_cell.satellites[j].D.append(curr_cell.satellites[j].D[self.time] + dDdt[i][j]*dt)
+                for j in range(curr_cell.num_rb_types):
+                    curr_cell.rockets[j].num.append(curr_cell.rockets[j].num[self.time] + dRdt[i][j]*dt)
             self.t.append(self.t[self.time] + dt) # update time
             self.time += 1
+            self.run_events() # run discrete events
 
     def run_sim_precor(self, T, dt=1, mindtfactor=1000, maxdt=1, tolerance=1, upper=True):
         '''
@@ -476,7 +517,7 @@ class NCell:
             dSdt_n1, dSddt_n1, dDdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
 
 
-    def sim_colls(self, dNdt, rate, m_1, m_2, index):
+    def sim_colls(self, dNdt, rate, m_1, m_2, index, typ):
         '''
         updates dNdt by distributing a rate of collisions between two objects of mass m_1, m_2 in
         the index'th cell
@@ -487,6 +528,7 @@ class NCell:
         m_1 : mass of the first object (kg)
         m_2 : mass of the second object (kg)
         index : index of the cell the collision occurs in
+        typ : object type of the main (first) object, either 'sat' (satellite) or 'rb' (rocket body)
 
         Keyword Parameter(s): None
 
@@ -498,9 +540,168 @@ class NCell:
         M = calc_M(m_1, m_2, v_rel) # M factor
         Lmin, Lmax = 10**self.logL_edges[0], 10**self.logL_edges[-1] # min and max characteristic lengths
         N_debris = calc_Ntot(M, Lmin, Lmax, 'coll')*rate # total rate of debris creation
-        prob_table = self.coll_probability_tables[index] # get right probability table
+        if typ == 'sat':
+            prob_table = self.sat_coll_probability_tables[index] # get right probability table
+        elif typ == 'rb':
+            prob_table = self.rb_coll_probability_tables[index]
         for i in range(len(self.cells)): # iterate through cells to send debris to
             dNdt[i] += N_debris*prob_table[i, :, :]
+
+    def sim_colls_satrb(self, dNdt, rate, m, index, typ):
+        '''
+        version of sim_coll used for the satellite-rocket body collisions workaround, where
+        each object is simulated as having its own catastrophic collision
+        
+        Parameter(s):
+        dNdt : current dNdt values (list of matrices, 1/yr)
+        rate : rate of collisions to simulate (1/yr)
+        m : mass of the object (kg)
+        index : index of the cell the collision occurs in
+        typ : object type in the collision, either 'sat' (satellite) or 'rb' (rocket body)
+
+        Keyword Parameter(s): None
+
+        Output(s): None
+        '''
+
+        if rate == 0 : return # just skip everything if you can
+        Lmin, Lmax = 10**self.logL_edges[0], 10**self.logL_edges[-1] # min and max characteristic lengths
+        N_debris = calc_Ntot(m, Lmin, Lmax, 'coll')*rate # total rate of debris creation
+        if typ == 'sat':
+            prob_table = self.sat_coll_probability_tables[index] # get right probability table
+        elif typ == 'rb':
+            prob_table = self.rb_coll_probability_tables[index]
+        for i in range(len(self.cells)): # iterate through cells to send debris to
+            dNdt[i] += N_debris*prob_table[i, :, :]
+
+    def sim_expl(self, dNdt, rate, C, index, typ):
+        '''
+        updates dNdt by distributing a rate of explosions for an object with constant C in
+        the index'th cell
+        
+        Parameter(s):
+        dNdt : current dNdt values (list of matrices, 1/yr)
+        rate : rate of explosions to simulate (1/yr)
+        C : fit constant for the explosion
+        index : index of the cell the collision occurs in
+        typ : object type of the main object, either 'sat' (satellite) or 'rb' (rocket body)
+
+        Keyword Parameter(s): None
+
+        Output(s): None
+        '''
+
+        if rate == 0 : return # just skip everything if you can
+        Lmin, Lmax = 10**self.logL_edges[0], 10**self.logL_edges[-1] # min and max characteristic lengths
+        N_debris = calc_Ntot(0, Lmin, Lmax, 'expl', C=C)*rate # total rate of debris creation
+        if typ == 'sat':
+            prob_table = self.sat_expl_probability_tables[index] # get right probability table
+        elif typ == 'rb':
+            prob_table = self.rb_expl_probability_tables[index]
+        for i in range(len(self.cells)): # iterate through cells to send debris to
+            dNdt[i] += N_debris*prob_table[i, :, :]
+
+    def sim_events(self):
+        '''
+        simulates discrete events at the current time
+
+        Input(s): None
+
+        Keyword Input(s): None
+
+        Output(s): None
+        '''
+
+        dN = np.zeros((len(self.cells), self.num_L, self.num_chi)) # debris change matrix
+
+        for i in range(len(self.cells)):
+
+            curr_cell = self.cells[i]
+            dS, dS_d, dD = np.zeros(curr_cell.num_sat_types), np.zeros(curr_cell.num_sat_types), np.zeros(curr_cell.num_sat_types)
+            dR = np.zeros(curr_cell.num_sat_types)
+            dN_loc = np.zeros((self.num_L, self.num_chi)) # debris change from non-collision sources
+            coll_list = []
+            expl_list = []
+            S, S_d, D, R = self.get_S()[i], self.get_SD()[i], self.get_D()[i], self.get_R()[i]
+            N = curr_cell.N_bins[self.time]
+
+            for event in curr_cell.events_list: # iterate through possible events
+
+                if event.time is not None: # events at specific times
+                    while event.time[0] <= self.t[self.time]:
+                        dS_temp, dS_d_temp, dD_temp, dR_temp, dN_loc_temp, coll_temp, expl_temp = event.run_event(S, S_d, D, R, N, self.logL_edges, self.chi_edges)
+                        event.time.pop(0)
+                        dS += dS_temp
+                        dS_d += dS_d_temp
+                        dD += dD_temp
+                        dR += dR_temp
+                        dN_loc += dN_loc_temp
+                        coll_list.extend(coll_temp)
+                        expl_list.extend(expl_temp)
+
+                if event.freq is not None: # events occuring at specific frequencies
+                    if self.t[self.time] - event.last_event <= event.freq:
+                        dS_temp, dS_d_temp, dD_temp, dR_temp, dN_loc_temp, coll_temp, expl_temp = event.run_event(S, S_d, D, R, N, self.logL_edges, self.chi_edges)
+                        dS += dS_temp
+                        dS_d += dS_d_temp
+                        dD += dD_temp
+                        dR += dR_temp
+                        dN_loc += dN_loc_temp
+                        coll_list.extend(coll_temp)
+                        expl_list.extend(expl_temp)
+
+                # update values
+                for j in range(curr_cell.num_sat_types):
+                    curr_cell.satellites[j].S[self.time] += dS[j]
+                    curr_cell.satellites[j].S_d[self.time] += dS_d[j]
+                    curr_cell.satellites[j].D[self.time] += dD[j]
+                for j in range(curr_cell.num_rb_types):
+                    curr_cell.rockets[j].num[self.time] += dR[j]
+                curr_cell.N_bins[self.time] += dN_loc
+
+                # handle collisions and explosions
+                self.parse_coll(dN, coll_list, i)
+                self.parse_expl(dN, expl_list, i)
+
+        # update with debris from collisions/explosions
+        for i in range(len(self.cells)):
+            curr_cell = self.cells[i]
+            curr_cell.N_bins[self.time] += dN[i,:,:]
+
+    def parse_coll(self, dN, coll_list, i):
+        '''
+        parses and runs discrete collision events, storing the debris generated in dN
+
+        Input(s):
+        dN : 3d matrix of changes in debris for each bin and cell
+        coll_list : list of collisions occuring in the current cell in the form [(kg, kg, typ, #)],
+                    i.e. [(m1, m2, typ, number of collisions)]. typ can be one of 'sat' (satellite-satellite),
+                    'sr' (satellite-rocket, where satellite is m1), or 'rb' (rocket-rocket)
+        i : index of the current cell
+        '''
+
+        for coll in coll_list: # iterate through list
+            m1, m2, typ, num = coll # unpack the list
+            if typ == 'sat' or typ == 'rb':
+                self.sim_colls(dN, num, m1, m2, i, typ)
+            elif typ == 'sr':
+                self.sim_colls_satrb(dN, num, m1, i, 'sat')
+                self.sim_colls_satrb(dN, num, m2, i, 'rb')
+    
+    def parse_expl(self, dN, expl_list, i):
+        '''
+        parses and runs discrete explosion events, storing the debris generated in dN
+
+        Input(s):
+        dN : 3d matrix of changes in debris for each bin and cell
+        expl_list : list of explosions occuring in the current cell in the form [(C, typ, #)], where
+                    C is the relevant fit constant and typ is the type of body exploding ('sat' or 'rb)
+        i : index of the current cell
+        '''
+
+        for expl in expl_list: # iterate through list
+            C, typ, num = expl # unpack the list
+            self.sim_expl(dN, num, C, i, typ)
 
     def get_t(self):
         '''
@@ -531,7 +732,7 @@ class NCell:
         to_return = []
         for cell in self.cells:
             to_return.append([])
-            for j in range(cell.num_types):
+            for j in range(cell.num_sat_types):
                 to_return[-1].append(cell.satellites[j].S)
         return to_return
 
@@ -550,7 +751,7 @@ class NCell:
         to_return = []
         for cell in self.cells:
             to_return.append([])
-            for j in range(cell.num_types):
+            for j in range(cell.num_sat_types):
                 to_return[-1].append(cell.satellites[j].S_d)
         return to_return
 
@@ -569,9 +770,29 @@ class NCell:
         to_return = []
         for cell in self.cells:
             to_return.append([])
-            for j in range(cell.num_types):
+            for j in range(cell.num_sat_types):
                 to_return[-1].append(cell.satellites[j].D)
         return to_return
+
+    def get_R(self):
+        '''
+        returns list of lists for number of rocket bodies in each shell
+
+        Parameter(s): None
+
+        Keyword Parameter(s): None
+
+        Returns:
+        list of array of R values for each cell, in order of ascending altitude
+        '''
+
+        to_return = []
+        for cell in self.cells:
+            to_return.append([])
+            for j in range(cell.num_rb_types):
+                to_return[-1].append(cell.rockets[j].num)
+        return to_return
+
 
     def get_N(self):
         '''

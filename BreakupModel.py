@@ -68,7 +68,6 @@ def calc_M(m_s, m_d, v):
 
     Output(s):
     M : value of M parameter (variable units)
-    cat : whether or not the collision was catestrophic (boolean)
     '''
 
     E_p = (0.5*m_d*((v*1000)**2)/m_s)/1000 # E_p in J/g
@@ -82,7 +81,7 @@ def calc_Ntot(M, Lmin, Lmax, typ, C=1):
     between Lmin and Lmax
 
     Parameter(s):
-    M : fit parameter given by calc_M (variable units)
+    M : fit parameter given by calc_M, ignored for explosions (variable units)
     Lmin : minimum characteristic length (m)
     Lmax : maximum characteristic length (m)
     typ : one of 'coll' (collision) or 'expl' (explosion)
