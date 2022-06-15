@@ -117,7 +117,7 @@ class NCell:
 
             # convert Nones to array of Nones
             if lam_rb[i] is None:
-                lam_rb = [None]*len(R_i[i])
+                lam_rb[i] = [None]*len(R_i[i])
             if up_time[i] is None:
                 up_time[i] = [None]*len(S[i])
             if del_t[i] is None:
