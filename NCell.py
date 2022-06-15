@@ -162,7 +162,7 @@ class NCell:
                     del_t[i][j] = 5
                 if expl_rate_L[j] is None:
                     expl_rate_L[j] = 0
-                if expl_rate_L[j] is None:
+                if expl_rate_D[j] is None:
                     expl_rate_D[j] = expl_rate_L[j]
                 if C_sat[j] is None:
                     C_sat[j] = 1
@@ -178,7 +178,7 @@ class NCell:
                     AM_sat[j] = 1/(20*2.2)
 
                 # compute atmospheric drag lifetime for satallites in the shell
-                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_sat[i][j])
+                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_sat[j])
                 if tau_do[i][j] is None:
                     tau_do[i][j] = tau/10
                 sat = Satellite(S[i][j], S_d[i][j], D[i][j], m_s[j], sigma_sat[j], lam[j], del_t[i][j],
@@ -220,7 +220,7 @@ class NCell:
                 ave_L = 10**((bin_bot_L+bin_top_L)/2)
                 bin_L += len(lethal_L[(bin_bot_L < lethal_L) & (lethal_L < bin_top_L)])
                 bin_L += len(nlethal_L[(bin_bot_L < nlethal_L) & (nlethal_L < bin_top_L)])
-                chi_dist = randX(bin_L, chi_min, chi_max, ave_L, 'coll')
+                chi_dist = randX(bin_L, chi_min, chi_max, ave_L, 'sat')
                 for k in range(num_chi):
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi + bin_top_chi)/2
@@ -231,7 +231,7 @@ class NCell:
 
             # figure out which events are in this cell
             events_loc = []
-            for event in self.events:
+            for event in events:
                 if (event.alt > alts[i] - dh[i]/2) and (event.alt <= alts[i] + dh[i]/2) : events_loc.append(event)
 
             # initialize cell
@@ -351,11 +351,13 @@ class NCell:
             R_coll.append(np.zeros((num_rb_types, num_rb_types)))
             NS_coll.append([])
             NR_coll.append([])
+            NS_expl.append([])
+            NR_expl.append([])
 
         # get initial D_in, N_in values
         S_in = np.zeros(num_sat_types)
         for i in range(num_sat_types):
-            S_in[i] = top_cell.satellites[j].lam
+            S_in[i] = top_cell.satellites[i].lam
         S_din = np.zeros(num_sat_types)
         D_in = np.zeros(num_sat_types)
         R_in = np.zeros(num_rb_types)
@@ -390,7 +392,7 @@ class NCell:
                         m_d = find_A(ave_L)/ave_AM
                         self.sim_colls(dNdt, NS_coll[i][j][k,l], m_s1, m_d, i, 'sat')
 
-                self.sim_expl(dNdt, NS_expl, C, i, 'sat')
+                self.sim_expl(dNdt, NS_expl[i][j], C, i, 'sat')
 
             for j in range(num_rb_types): # iterate through rocket body types
 
@@ -408,7 +410,7 @@ class NCell:
                         m_d = find_A(ave_L)/ave_AM
                         self.sim_colls(dNdt, NR_coll[i][j][k,l], m_rb1, m_d, i, 'rb')
 
-                self.sim_expl(dNdt, NR_expl, C, i, 'rb')
+                self.sim_expl(dNdt, NR_expl[i][j], C, i, 'rb')
                     
             # add on debris lost to collisions
             dNdt[i] -= sum(NS_coll[i] + NR_coll[i])
@@ -445,7 +447,7 @@ class NCell:
         Output(s): None
         '''
 
-        self.run_events() # run initial discrete events
+        self.sim_events() # run initial discrete events
 
         while self.t[self.time] < T:
             dSdt, dS_ddt, dDdt, dRdt, dNdt, dCldt, dCnldt = self.dxdt(self.time, upper) # get current rates of change
@@ -462,7 +464,7 @@ class NCell:
                     curr_cell.rockets[j].num.append(curr_cell.rockets[j].num[self.time] + dRdt[i][j]*dt)
             self.t.append(self.t[self.time] + dt) # update time
             self.time += 1
-            self.run_events() # run discrete events
+            self.sim_events() # run discrete events
 
     def run_sim_precor(self, T, dt=1, mindtfactor=1000, maxdt=1, tolerance=1, upper=True):
         '''
@@ -672,7 +674,7 @@ class NCell:
             S, S_d, D, R = self.get_S()[i], self.get_SD()[i], self.get_D()[i], self.get_R()[i]
             N = curr_cell.N_bins[self.time]
 
-            for event in curr_cell.events_list: # iterate through possible events
+            for event in curr_cell.event_list: # iterate through possible events
 
                 if event.time is not None: # events at specific times
                     while event.time[0] <= self.t[self.time]:
