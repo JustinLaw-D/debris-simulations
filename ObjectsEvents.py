@@ -2,7 +2,7 @@
 
 class Satellite:
 
-    def __init__(self, S_i, S_di, D_i, m, sigma, lam, del_t, tau_do, alpha, P, AM, tau):
+    def __init__(self, S_i, S_di, D_i, m, sigma, lam, del_t, tau_do, target_alt, up_time, alpha, P, AM, tau):
         '''
         constructor method for Satellite class
 
@@ -15,6 +15,8 @@ class Satellite:
         lam : launch rate of the satellites (1/yr)
         del_t : mean satellite lifetime (yr)
         tau_do : mean time for satellite to de-orbit from shell (yr)
+        target_alt : target final altitude for the satellite type (km)
+        up_time : amount of time it takes a satellite to ascend through the band (yr)
         alpha : fraction of collisions a live satellites fails to avoid
         P : post-mission disposal probability
         AM : area-to-mass ratio of the satellite (m^2/kg)
@@ -35,6 +37,8 @@ class Satellite:
         self.lam = lam
         self.del_t = del_t
         self.tau_do = tau_do
+        self.target_alt = target_alt
+        self.up_time = up_time
         self.alpha = alpha
         self.P = P
         self.AM = AM
