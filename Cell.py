@@ -101,6 +101,8 @@ class Cell:
         R_dt : matrix with total rate of collisions between rocket bodies (yr^(-1))
         CS_dt : list of matrices with the rate of collisions from each bin with each satellite type (yr^(-1))
         CR_dt : list of matrices with the rate of collisions from each bin with each rocket body type (yr^(-1))
+        expl_S : list of rate of explosions for satellites of each type (yr^(-1))
+        expl_R : list of rate of explosions for rocket bodies of each type (yr^(-1))
 
         Note: Assumes that collisions with debris of L_cm < 10cm cannot be avoided, and
         that the given time input is valid
@@ -122,28 +124,27 @@ class Cell:
         dRdt = [] # collisions with rocket bodies
         dRRdt = np.zeros((self.num_rb_types, self.num_rb_types)) # collisions between rocket bodies
         decay_N = np.zeros(N.shape) # rate of debris that decay
-        ascend_S = [] # rate of satellites ascending into a higher orbit
-        kill_S = [] # rate of satellites being put into de-orbit
-        deorbit_S = [] # rate of satellites de-orbiting out of the band
-        decay_D = [] # rate of derelicts that decay
-        decay_R = [] # rate of rocket bodies that decay
-        dSdt_tot = [] # total rate of change for live satellites
-        dS_ddt_tot = [] # total rate of change for de-orbiting satellites
-        dDdt_tot = [] # total rate of change of derelict satellites
-        dRdt_tot = [] # total rate of change for rocket bodies
+        ascend_S = np.zeros(self.num_sat_types) # rate of satellites ascending into a higher orbit
+        kill_S = np.zeros(self.num_sat_types) # rate of satellites being put into de-orbit
+        deorbit_S = np.zeros(self.num_sat_types) # rate of satellites de-orbiting out of the band
+        decay_D = np.zeros(self.num_sat_types) # rate of derelicts that decay
+        decay_R = np.zeros(self.num_rb_types) # rate of rocket bodies that decay
+        dSdt_tot = np.zeros(self.num_sat_types) # total rate of change for live satellites
+        dS_ddt_tot = np.zeros(self.num_sat_types) # total rate of change for de-orbiting satellites
+        dDdt_tot = np.zeros(self.num_sat_types) # total rate of change of derelict satellites
+        dRdt_tot = np.zeros(self.num_rb_types) # total rate of change for rocket bodies
         CS_dt = []
         CR_dt = []
+        expl_S = np.zeros(self.num_sat_types)
+        expl_Sd = np.zeros(self.num_sat_types)
+        expl_D = np.zeros(self.num_sat_types)
+        expl_R = np.zeros(self.num_rb_types)
         for i in range(self.num_sat_types):
             dSdt.append(np.zeros(N.shape))
             dS_ddt.append(np.zeros(N.shape))
             dDdt.append(np.zeros(N.shape))
-            ascend_S.append(0)
-            kill_S.append(0)
-            deorbit_S.append(0)
-            decay_D.append(0)
         for i in range(self.num_rb_types):
             dRdt.append(np.zeros(N.shape))
-            decay_R.append(0)
 
         for i in range(self.num_sat_types):
 
@@ -153,6 +154,8 @@ class Cell:
             D = self.satellites[i].D[time]
             sigma = self.satellites[i].sigma
             alpha = self.satellites[i].alpha
+            expl_rate_L = self.satellites[i].expl_rate_L
+            expl_rate_D = self.satellites[i].expl_rate_D
 
             # handle debris events with satellites
             for j in range(self.num_L):
@@ -184,6 +187,11 @@ class Cell:
                 tot_Sd_sat_coll += dS_dDdt[i,j]
                 tot_D_sat_coll += dRdt[i,j]
 
+            # compute explosions for satellites
+            expl_S[i] = expl_rate_L*S/100
+            expl_Sd[i] = expl_rate_L*S_d/100
+            expl_D[i] = expl_rate_D*D/100
+
             # compute decay/ascend events for satellites
             up_time = self.satellites[i].up_time
             del_t = self.satellites[i].del_t
@@ -194,10 +202,10 @@ class Cell:
 
             # sum everything up
             P = self.satellites[i].P
-            dSdt_tot.append(S_in[i] - kill_S[i] - np.sum(dSdt[i]) - tot_S_sat_coll)
-            dS_ddt_tot.append(S_din[i] + P*kill_S[i] - np.sum(dS_ddt[i]) - deorbit_S[i] - tot_Sd_sat_coll)
+            dSdt_tot.append(S_in[i] - kill_S[i] - np.sum(dSdt[i]) - tot_S_sat_coll - expl_S[i])
+            dS_ddt_tot.append(S_din[i] + P*kill_S[i] - np.sum(dS_ddt[i]) - deorbit_S[i] - tot_Sd_sat_coll - expl_Sd[i])
             dDdt_tot.append(D_in[i] + (1-P)*kill_S[i] - np.sum(dDdt[i][self.lethal_N[i] == True]) - decay_D[i] - tot_D_sat_coll
-                            + np.sum(dSdt[i][self.lethal_N[i] == False]) + np.sum(dS_ddt[i][self.lethal_N[i] == False]))
+                            + np.sum(dSdt[i][self.lethal_N[i] == False]) + np.sum(dS_ddt[i][self.lethal_N[i] == False]) - expl_D[i])
             CS_dt.append(dSdt[i] + dS_ddt[i] + dDdt[i])
 
         for i in range(self.num_rb_types): # handle rocket body only events
@@ -206,6 +214,7 @@ class Cell:
             R = self.rockets[i].num[time]
             sigma = self.rockets[i].sigma
             lam = self.rockets[i].lam
+            expl_rate = self.rockets[i].expl_rate
 
             # handle rocket-debris collisions
             for j in range(self.num_L):
@@ -222,8 +231,11 @@ class Cell:
                 if i != j : tot_R_coll += dRRdt[i,j]
                 else : tot_R_coll += 2*dRRdt[i,j]
 
+            # handle rocket explosions
+            expl_R[i] = expl_rate*R/100
+
             # sum everything up
-            dRdt_tot.append(lam + R_in - np.sum(dRdt[i]) - tot_R_coll)
+            dRdt_tot.append(lam + R_in - np.sum(dRdt[i]) - tot_R_coll - expl_R[i])
             CR_dt.append(dRdt[i])
 
         # calculate rates of decay for debris
@@ -235,7 +247,8 @@ class Cell:
         D_dt = dSDdt + dS_dDdt + dDDdt
         RD_dt = dSRdt + dS_dRdt + dDRdt
         R_dt = dRRdt
-        return dSdt_tot, dS_ddt_tot, dDdt_tot, dRdt_tot, ascend_S, deorbit_S, decay_D, decay_R, decay_N, D_dt, RD_dt, R_dt, CS_dt, CR_dt
+        expl_S_tot = expl_S + expl_Sd + expl_D
+        return dSdt_tot, dS_ddt_tot, dDdt_tot, dRdt_tot, ascend_S, deorbit_S, decay_D, decay_R, decay_N, D_dt, RD_dt, R_dt, CS_dt, CR_dt, expl_S_tot, expl_R
 
     def N_sat_events(self, S, S_d, D, N, sigma, alpha, ave_L):
         '''
