@@ -4,6 +4,8 @@
 import numpy as np
 from BreakupModel import *
 from ObjectsEvents import *
+import os
+import csv
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
 Me = 5.97219e24 # mass of Earth (kg)
 Re = 6371 # radius of Earth (km)
@@ -70,6 +72,132 @@ class Cell:
         for sat in self.satellites:
             if sat.target_alt < self.alt - self.dh/2 : self.ascending.append(True)
             else : self.ascending.append(False)
+
+    def save(self, filepath):
+        '''
+        saves the current Cell object to .csv and .npz files
+
+        Input(s):
+        filepath : explicit path to folder that the files will be saved in (string)
+
+        Keyword Input(s): None
+
+        Output(s): None
+
+        Note(s): event_list is lost
+        '''
+
+        # save parameters
+        csv_file = open(filepath + 'params.csv', 'w', newline='')
+        csv_writer = csv.writer(csv_file, dialec='unix')
+        csv_writer.write_row([self.num_sat_types, self.num_rb_types, self.alt, self.dh, self.v, self.v_orbit, self.num_L,
+                              self.num_chi])
+        csv_file.close()
+
+        # write easy arrays
+        Cl_array, Cnl_array = np.array(self.C_l), np.array(self.C_nl)
+        to_save = {'C_l' : Cl_array, 'C_nl' : Cnl_array, 'N_factor' : self.N_factor_table, 'tau_N' : self.tau_N, 
+                   'ascending' : self.ascending, 'logL' : self.logL_edges, 'chi' : self.chi_edges}
+        np.savez(filepath + "data.npz", **to_save)
+
+        # write N_bins values
+        N_dict = dict()
+        for i in range(len(self.N_bins)):
+            dict[str(i)] = self.N_bins[i]
+        np.savez(filepath + "N_bins.npz", **N_dict)
+
+        # write lethal table values
+        lethal_dict = dict()
+        for i in range(self.num_sat_types):
+            lethal_dict["sat" + str(i)] = self.lethal_sat_N[i]
+        for i in range(self.num_rb_types):
+            lethal_dict["rb" + str(i)] = self.lethal_rb_N[i]
+        np.savez(filepath + "lethal_tables.npz", **lethal_dict)
+
+        # write satellites and rockets
+        for i in range(self.num_sat_types):
+            sat_path = filepath + 'Satellite' + str(i) + '/'
+            os.mkdir(sat_path)
+            self.satellites[i].save(sat_path)
+        for i in range(self.num_rb_types):
+            rb_path = filepath + 'RocketBody' + str(i) + '/'
+            os.mkdir(rb_path)
+            self.rockets[i].save(rb_path)
+
+    def load(filepath):
+        '''
+        builds a Cell object from saved data
+
+        Input(s):
+        filepath : explicit path to folder that the files are saved in (string)
+
+        Keyword Input(s): None
+
+        Output(s):
+        cell : Cell object build from loaded data
+
+        Note(s): cell will not have events
+        '''
+
+        cell = Cell.__new__(Cell) # create blank Cell
+
+        # load parameters
+        csv_file = open(filepath + 'params.csv', 'r', newline='')
+        csv_reader = csv.reader(csv_file, dialec='unix')
+        for row in csv_reader: # there's only one row, this extracts it
+            cell.num_sat_types = int(row[0])
+            cell.num_rb_types = int(row[1])
+            cell.alt = float(row[2])
+            cell.dh = float(row[3])
+            cell.v = float(row[4])
+            cell.v_orbit = float(row[5])
+            cell.num_L = int(row[6])
+            cell.num_chi = int(row[7])
+        csv_file.close()
+
+        # load basic arrays
+        array_dict = np.load(filepath + "data.npz")
+        cell.C_l = array_dict['C_l'].to_list()
+        cell.C_nl = array_dict['C_nl'].to_list()
+        cell.N_factor_table = array_dict['N_factor']
+        cell.tau_N = array_dict['tau_N']
+        cell.ascending = array_dict['ascending']
+        cell.logL_edges = array_dict['logL']
+        cell.chi_edges = array_dict['chi']
+
+        # load N_bins values
+        cell.N_bins = []
+        bins_dict = np.load(filepath + "N_bins.npz")
+        i = 0
+        while True:
+            try:
+                N_bins = bins_dict[str(i)]
+                cell.N_bins.append(N_bins)
+            except KeyError:
+                break
+            i += 1
+        
+        # load lethal table values
+        lethal_dict = np.load(filepath + "lethal_tables.npz")
+        cell.lethal_sat_N = []
+        cell.lethal_rb_N = []
+        for i in range(cell.num_sat_types):
+            cell.lethal_sat_N.append(lethal_dict["sat" + str(i)])
+        for i in range(cell.num_rb_types):
+            cell.lethal_rb_N.append(lethal_dict["rb" + str(i)])
+
+        # load satellites and rockets
+        cell.satellites = []
+        cell.rockets = []
+        for i in range(cell.num_sat_types):
+            sat_path = filepath + 'Satellite' + str(i) + '/'
+            cell.satellites.append(Satellite.load(sat_path))
+        for i in range(cell.num_rb_types):
+            rb_path = filepath + 'RocketBody' + str(i) + '/'
+            cell.rockets.append(RocketBody.load(rb_path))
+
+        cell.event_list = []
+        return cell
 
     def dxdt_cell(self, time, S_in, S_din, D_in, R_in):
         '''

@@ -1,5 +1,8 @@
 # classes for object (Satellite, RocketBody) and discrete events
 
+import numpy as np
+import csv
+
 class Satellite:
 
     def __init__(self, S_i, S_di, D_i, m, sigma, lam, del_t, tau_do, target_alt, up_time, alpha,
@@ -53,6 +56,64 @@ class Satellite:
         self.expl_rate_L = expl_rate_L
         self.expl_rate_D = expl_rate_D
 
+    def save(self, filepath):
+        '''
+        saves the current Satellite object to .csv and .npz files
+
+        Input(s):
+        filepath : explicit path to folder that the files will be saved in (string)
+
+        Keyword Input(s): None
+
+        Output(s): None
+        '''
+
+        # save parameters
+        csv_file = open(filepath + 'params.csv', 'w', newline='')
+        csv_writer = csv.writer(csv_file, dialec='unix')
+        csv_writer.write_row([self.m, self.sigma, self.lam, self.del_t, self.tau_do, self.target_alt, 
+                              self.up_time, self.alpha, self.P, self.AM, self.tau, self.C, self.expl_rate_L,
+                              self.expl_rate_D])
+        csv_file.close()
+
+        # save data
+        S_array, Sd_array, D_array = np.array(self.S), np.array(self.S_d), np.array(self.D)
+        to_save = {'S' : S_array, 'S_d' : Sd_array, 'D' : D_array}
+        np.savez(filepath + "data.npz", **to_save)
+
+    def load(filepath):
+        '''
+        builds a Satellite object from saved data
+
+        Input(s):
+        filepath : explicit path to folder that the files are saved in (string)
+
+        Keyword Input(s): None
+
+        Output(s):
+        sat : Satellite object build from loaded data
+        '''
+
+        sat = Satellite.__new__(Satellite) # make a blank satellite
+
+        # load parameters
+        csv_file = open(filepath + 'params.csv', 'r', newline='')
+        csv_reader = csv.reader(csv_file, dialec='unix')
+        for row in csv_reader: # there's only one row, but this extracts it
+            sat.m, sat.sigma, sat.lam, sat.del_t = float(row[0]), float(row[1]), float(row[2]), float(row[3])
+            sat.tau_do, sat.target_alt, sat.up_time, sat.alpha = float(row[4]), float(row[5]), float(row[6]), float(row[7])
+            sat.P, sat.AM, sat.tau, sat.C = float(row[8]), float(row[9]), float(row[10]), float(row[11])
+            sat.expl_rate_L, sat.expl_rate_D = float(row[12]), float(row[13])
+        csv_file.close()
+
+        # load data
+        data_dict = np.load(filepath + "data.npz")
+        sat.S = data_dict['S'].to_list()
+        sat.D = data_dict['D'].to_list()
+        sat.S_d = data_dict['S_d'].to_list()
+
+        return sat
+
 class RocketBody:
 
     def __init__(self, num, m, sigma, lam, AM, tau, C, expl_rate):
@@ -86,6 +147,57 @@ class RocketBody:
         self.C = C
         self.expl_rate = expl_rate
 
+    def save(self, filepath):
+        '''
+        saves the current Rocket object to .csv and .npz files
+
+        Input(s):
+        filepath : explicit path to folder that the files will be saved in (string)
+
+        Keyword Input(s): None
+
+        Output(s): None
+        '''
+
+        # save parameters
+        csv_file = open(filepath + 'params.csv', 'w', newline='')
+        csv_writer = csv.writer(csv_file, dialec='unix')
+        csv_writer.write_row([self.m, self.sigma, self.lam, self.AM, self.tau, self.C, self.expl_rate])
+        csv_file.close()
+
+        # save data
+        num_array = np.array(self.num)
+        to_save = {'num' : num_array}
+        np.savez(filepath + "data.npz", **to_save)
+
+    def load(filepath):
+        '''
+        builds a RocketBody object from saved data
+
+        Input(s):
+        filepath : explicit path to folder that the files are saved in (string)
+
+        Keyword Input(s): None
+
+        Output(s):
+        rb : RocketBody object build from loaded data
+        '''
+
+        rb = RocketBody.__new__(RocketBody) # creates empty instance
+
+        # load parameters
+        csv_file = open(filepath + 'params.csv', 'w', newline='')
+        csv_reader = csv.reader(csv_file, dialec='unix')
+        for row in csv_reader: # only one row, but this extracts is
+            rb.m, rb.sigma, rb.lam, rb.AM = float(row[0]), float(row[1]), float(row[2]), float(row[3])
+            rb.tau, rb.C, rb.expl_rate = float(row[4]), float(row[5]), float(row[6])
+        csv_file.close()
+
+        # load data
+        data_dict = np.load(filepath + "data.npz")
+        rb.num = data_dict['num'].to_list()
+
+        return rb    
 
 class Event:
     

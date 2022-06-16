@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from BreakupModel import *
 from copy import deepcopy
+import os
+import csv
 
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
 Re = 6371 # radius of Earth (km)
@@ -301,6 +303,114 @@ class NCell:
                         else : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), theta[l], phi[l], v0, ave_chi, e_typ) - vprime_cdf(np.sqrt(v_min2), v0, theta[l], phi[l], ave_chi, e_typ))
                     curr_prob[i,j,k] = sum/num_dir
             curr_prob[i,:,:] *= self.cells[cell_index].N_factor_table # only count relevant debris
+
+    def save(self, filepath, name):
+        '''
+        saves the current NCell object to .csv and .npz files
+
+        Input(s):
+        filepath : explicit path to folder that the files will be saved in (string)
+        name : name of the object, must be a valid unix folder name (string)
+
+        Keyword Input(s): None
+
+        Output(s): None
+
+        Note(s): drag_lifetime and events are lost
+        '''
+
+        true_path = filepath + name + '/'
+        os.mkdir(true_path) # make the folder representing the object
+
+        # write parameters
+        csv_file = open(true_path + 'params.csv', 'w', newline='')
+        csv_writer = csv.writer(csv_file, dialec='unix')
+        csv_writer.write_row([self.num_L, self.num_chi, self.time, len(self.cells)])
+        csv_file.close()
+
+        # write easy arrays
+        alts_arr, dh_arr, t_arr = np.array(self.alts), np.array(self.dh), np.array(self.t)
+        to_save = {'alts' : alts_arr, 'dh' : dh_arr, 't' : t_arr, 'logL' : self.logL_edges, 'chi' : self.chi_edges}
+        np.savez(true_path + "data.npz", **to_save)
+
+        # write probability tables
+        sat_coll_tables = dict()
+        rb_coll_tables = dict()
+        sat_expl_tables = dict()
+        rb_expl_tables = dict()
+        for i in range(len(self.cells)):
+            sat_coll_tables[str(i)] = self.sat_coll_probability_tables[i]
+            rb_coll_tables[str(i)] = self.rb_coll_probability_tables[i]
+            sat_expl_tables[str(i)] = self.sat_expl_probability_tables[i]
+            rb_expl_tables[str(i)] = self.rb_expl_probability_tables[i]
+        np.savez(true_path + "sat_coll_tables.npz", **sat_coll_tables)
+        np.savez(true_path + "rb_coll_tables.npz", **rb_coll_tables)
+        np.savez(true_path + "sat_expl_tables.npz", **sat_expl_tables)
+        np.savez(true_path + "rb_expl_tables.npz", **rb_expl_tables)
+
+        # save the Cells
+        for i in range(self.cells):
+            cell_path = true_path + "cell" + str(i) + "/"
+            os.mkdir(cell_path)
+            self.cells[i].save(cell_path)
+
+    def load(filepath):
+        '''
+        builds an NCell object from saved data
+
+        Input(s):
+        filepath : explicit path to folder that the files are saved in (string)
+
+        Keyword Input(s): None
+
+        Output(s):
+        atmos : NCell object build from loaded data
+
+        Note(s): atmos will not have events
+        '''
+
+        atmos = NCell.__new__(NCell) # empty initialization
+
+        # load parameters
+        csv_file = open(filepath + 'params.csv', 'r', newline='')
+        csv_reader = csv.reader(csv_file, dialec='unix')
+        for row in csv_reader: # there's only one row, this extracts it
+            atmos.num_L = int(row[0])
+            atmos.num_chi = int(row[1])
+            atmos.time = int(row[2])
+            num_cells = int(row[3])
+        csv_file.close()
+
+        # load in simple numpy arrays
+        array_dict = np.load(filepath + 'data.npz')
+        atmos.alts = array_dict['alts'].to_list()
+        atmos.dh = array_dict['dh'].to_list()
+        atmos.t = array_dict['t'].to_list()
+        atmos.logL_edges = array_dict['logL']
+        atmos.chi_edges = array_dict['chi']
+
+        # load in probability tables
+        sat_coll_dict = np.load(filepath + "sat_coll_tables.npz")
+        rb_coll_dict = np.load(filepath + "rb_coll_tables.npz")
+        sat_expl_dict = np.load(filepath + "sat_expl_tables.npz")
+        rb_expl_dict = np.load(filepath + "rb_expl_tables.npz")
+        atmos.sat_coll_probability_tables = []
+        atmos.rb_coll_probability_tables = []
+        atmos.sat_expl_probability_tables = []
+        atmos.rb_expl_probability_tables = []
+        for i in range(num_cells):
+            atmos.sat_coll_probability_tables.append(sat_coll_dict[str(i)])
+            atmos.rb_coll_probability_tables.append(rb_coll_dict[str(i)])
+            atmos.sat_expl_probability_tables.append(sat_expl_dict[str(i)])
+            atmos.rb_expl_probability_tables.append(rb_expl_dict[str(i)])
+
+        # get Cells
+        atmos.cells = []
+        for i in range(num_cells):
+            cell_path = filepath + "cell" + str(i) + "/"
+            atmos.cells.append(Cell.load(cell_path))
+
+        return atmos
 
     def dxdt(self, time, upper):
         '''
