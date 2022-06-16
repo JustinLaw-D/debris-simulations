@@ -234,7 +234,7 @@ class Cell:
             expl_R[i] = expl_rate*R/100
 
             # sum everything up
-            dRdt_tot[i] = lam + R_in - np.sum(dRdt[i][lethal_rb_N[i] == True]) - tot_R_coll - expl_R[i]
+            dRdt_tot[i] = lam + R_in - np.sum(dRdt[i][self.lethal_rb_N[i] == True]) - tot_R_coll - expl_R[i]
             CR_dt.append(dRdt[i])
 
         # calculate rates of decay for debris
