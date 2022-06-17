@@ -73,14 +73,15 @@ class Cell:
             if sat.target_alt < self.alt - self.dh/2 : self.ascending.append(True)
             else : self.ascending.append(False)
 
-    def save(self, filepath):
+    def save(self, filepath, compress=True):
         '''
         saves the current Cell object to .csv and .npz files
 
         Input(s):
         filepath : explicit path to folder that the files will be saved in (string)
 
-        Keyword Input(s): None
+        Keyword Input(s):
+        compress : whether or not to save the data in a compressed format (default True)
 
         Output(s): None
 
@@ -98,13 +99,15 @@ class Cell:
         Cl_array, Cnl_array = np.array(self.C_l), np.array(self.C_nl)
         to_save = {'C_l' : Cl_array, 'C_nl' : Cnl_array, 'N_factor' : self.N_factor_table, 'tau_N' : self.tau_N, 
                    'ascending' : self.ascending, 'logL' : self.logL_edges, 'chi' : self.chi_edges}
-        np.savez(filepath + "data.npz", **to_save)
+        if compress : np.savez_compressed(filepath + "data.npz", **to_save)
+        else : np.savez(filepath + "data.npz", **to_save)
 
         # write N_bins values
         N_dict = dict()
         for i in range(len(self.N_bins)):
             N_dict[str(i)] = self.N_bins[i]
-        np.savez(filepath + "N_bins.npz", **N_dict)
+        if compress : np.savez_compressed(filepath + "N_bins.npz", **N_dict)
+        else : np.savez(filepath + "N_bins.npz", **N_dict)
 
         # write lethal table values
         lethal_dict = dict()
@@ -112,17 +115,18 @@ class Cell:
             lethal_dict["sat" + str(i)] = self.lethal_sat_N[i]
         for i in range(self.num_rb_types):
             lethal_dict["rb" + str(i)] = self.lethal_rb_N[i]
-        np.savez(filepath + "lethal_tables.npz", **lethal_dict)
+        if compress : np.savez_compressed(filepath + "lethal_tables.npz", **lethal_dict)
+        else : np.savez(filepath + "lethal_tables.npz", **lethal_dict)
 
         # write satellites and rockets
         for i in range(self.num_sat_types):
             sat_path = filepath + 'Satellite' + str(i) + '/'
             os.mkdir(sat_path)
-            self.satellites[i].save(sat_path)
+            self.satellites[i].save(sat_path, compress=compress)
         for i in range(self.num_rb_types):
             rb_path = filepath + 'RocketBody' + str(i) + '/'
             os.mkdir(rb_path)
-            self.rockets[i].save(rb_path)
+            self.rockets[i].save(rb_path, compress=compress)
 
     def load(filepath):
         '''

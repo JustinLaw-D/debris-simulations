@@ -304,7 +304,7 @@ class NCell:
                     curr_prob[i,j,k] = sum/num_dir
             curr_prob[i,:,:] *= self.cells[cell_index].N_factor_table # only count relevant debris
 
-    def save(self, filepath, name):
+    def save(self, filepath, name, compress=True, force=False):
         '''
         saves the current NCell object to .csv and .npz files
 
@@ -312,7 +312,9 @@ class NCell:
         filepath : explicit path to folder that the files will be saved in (string)
         name : name of the object, must be a valid unix folder name (string)
 
-        Keyword Input(s): None
+        Keyword Input(s):
+        compress : whether or not to save the data in a compressed format (default True)
+        force : whether or not to automatically replace any saved data with the same name (default False)
 
         Output(s): None
 
@@ -320,7 +322,16 @@ class NCell:
         '''
 
         true_path = filepath + name + '/'
-        os.mkdir(true_path) # make the folder representing the object
+        try:
+            os.mkdir(true_path) # make the folder representing the object
+        except FileExistsError:
+            x = 'y'
+            if not force:
+                x = input("File with this name already exists. Replace it (y/n): ")
+            if x == 'y':
+                os.rmdir(true_path)
+                os.mkdir(true_path)
+            else : return
 
         # write parameters
         csv_file = open(true_path + 'params.csv', 'w', newline='')
@@ -331,7 +342,8 @@ class NCell:
         # write easy arrays
         alts_arr, dh_arr, t_arr = np.array(self.alts), np.array(self.dh), np.array(self.t)
         to_save = {'alts' : alts_arr, 'dh' : dh_arr, 't' : t_arr, 'logL' : self.logL_edges, 'chi' : self.chi_edges}
-        np.savez(true_path + "data.npz", **to_save)
+        if compress : np.savez_compressed(true_path + "data.npz", **to_save)
+        else : np.savez(true_path + "data.npz", **to_save)
 
         # write probability tables
         sat_coll_tables = dict()
@@ -343,16 +355,22 @@ class NCell:
             rb_coll_tables[str(i)] = self.rb_coll_probability_tables[i]
             sat_expl_tables[str(i)] = self.sat_expl_probability_tables[i]
             rb_expl_tables[str(i)] = self.rb_expl_probability_tables[i]
-        np.savez(true_path + "sat_coll_tables.npz", **sat_coll_tables)
-        np.savez(true_path + "rb_coll_tables.npz", **rb_coll_tables)
-        np.savez(true_path + "sat_expl_tables.npz", **sat_expl_tables)
-        np.savez(true_path + "rb_expl_tables.npz", **rb_expl_tables)
+        if compress:
+            np.savez_compressed(true_path + "sat_coll_tables.npz", **sat_coll_tables)
+            np.savez_compressed(true_path + "rb_coll_tables.npz", **rb_coll_tables)
+            np.savez_compressed(true_path + "sat_expl_tables.npz", **sat_expl_tables)
+            np.savez_compressed(true_path + "rb_expl_tables.npz", **rb_expl_tables)
+        else:
+            np.savez(true_path + "sat_coll_tables.npz", **sat_coll_tables)
+            np.savez(true_path + "rb_coll_tables.npz", **rb_coll_tables)
+            np.savez(true_path + "sat_expl_tables.npz", **sat_expl_tables)
+            np.savez(true_path + "rb_expl_tables.npz", **rb_expl_tables)
 
         # save the Cells
         for i in range(len(self.cells)):
             cell_path = true_path + "cell" + str(i) + "/"
             os.mkdir(cell_path)
-            self.cells[i].save(cell_path)
+            self.cells[i].save(cell_path, compress=compress)
 
     def load(filepath):
         '''
