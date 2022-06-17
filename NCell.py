@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from BreakupModel import *
 from copy import deepcopy
 import os
+import shutil
 import csv
 
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
@@ -329,7 +330,7 @@ class NCell:
             if not force:
                 x = input("File with this name already exists. Replace it (y/n): ")
             if x == 'y':
-                os.rmdir(true_path)
+                shutil.rmtree(true_path)
                 os.mkdir(true_path)
             else : return
 
