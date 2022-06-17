@@ -21,6 +21,8 @@ def drag_lifetime_loc(hmax, hmin, a_over_m):
 atmosphere = NCell([S_i], [S_di], [D_i], [N_i], [alt], [alt], [dh], [lam], drag_lifetime_loc, tau_do=[[2]])
 
 atmosphere.run_sim_euler(T, dt=0.01)
+atmosphere.save("/store/lawren17/debris-simulations/tests_simulations/", "test_save")
+atmosphere = NCell.load("/store/lawren17/debris-simulations/tests_simulations/test_save/")
 t = atmosphere.get_t()
 S = atmosphere.get_S()[0][0]
 S_d = atmosphere.get_SD()[0][0]

@@ -70,10 +70,10 @@ class Satellite:
 
         # save parameters
         csv_file = open(filepath + 'params.csv', 'w', newline='')
-        csv_writer = csv.writer(csv_file, dialec='unix')
-        csv_writer.write_row([self.m, self.sigma, self.lam, self.del_t, self.tau_do, self.target_alt, 
-                              self.up_time, self.alpha, self.P, self.AM, self.tau, self.C, self.expl_rate_L,
-                              self.expl_rate_D])
+        csv_writer = csv.writer(csv_file, dialect='unix')
+        csv_writer.writerow([self.m, self.sigma, self.lam, self.del_t, self.tau_do, self.target_alt, 
+                             self.up_time, self.alpha, self.P, self.AM, self.tau, self.C, self.expl_rate_L,
+                             self.expl_rate_D])
         csv_file.close()
 
         # save data
@@ -98,7 +98,7 @@ class Satellite:
 
         # load parameters
         csv_file = open(filepath + 'params.csv', 'r', newline='')
-        csv_reader = csv.reader(csv_file, dialec='unix')
+        csv_reader = csv.reader(csv_file, dialect='unix')
         for row in csv_reader: # there's only one row, but this extracts it
             sat.m, sat.sigma, sat.lam, sat.del_t = float(row[0]), float(row[1]), float(row[2]), float(row[3])
             sat.tau_do, sat.target_alt, sat.up_time, sat.alpha = float(row[4]), float(row[5]), float(row[6]), float(row[7])
@@ -108,9 +108,9 @@ class Satellite:
 
         # load data
         data_dict = np.load(filepath + "data.npz")
-        sat.S = data_dict['S'].to_list()
-        sat.D = data_dict['D'].to_list()
-        sat.S_d = data_dict['S_d'].to_list()
+        sat.S = data_dict['S'].tolist()
+        sat.D = data_dict['D'].tolist()
+        sat.S_d = data_dict['S_d'].tolist()
 
         return sat
 
@@ -161,8 +161,8 @@ class RocketBody:
 
         # save parameters
         csv_file = open(filepath + 'params.csv', 'w', newline='')
-        csv_writer = csv.writer(csv_file, dialec='unix')
-        csv_writer.write_row([self.m, self.sigma, self.lam, self.AM, self.tau, self.C, self.expl_rate])
+        csv_writer = csv.writer(csv_file, dialect='unix')
+        csv_writer.writerow([self.m, self.sigma, self.lam, self.AM, self.tau, self.C, self.expl_rate])
         csv_file.close()
 
         # save data
@@ -187,7 +187,7 @@ class RocketBody:
 
         # load parameters
         csv_file = open(filepath + 'params.csv', 'w', newline='')
-        csv_reader = csv.reader(csv_file, dialec='unix')
+        csv_reader = csv.reader(csv_file, dialect='unix')
         for row in csv_reader: # only one row, but this extracts is
             rb.m, rb.sigma, rb.lam, rb.AM = float(row[0]), float(row[1]), float(row[2]), float(row[3])
             rb.tau, rb.C, rb.expl_rate = float(row[4]), float(row[5]), float(row[6])
@@ -195,7 +195,7 @@ class RocketBody:
 
         # load data
         data_dict = np.load(filepath + "data.npz")
-        rb.num = data_dict['num'].to_list()
+        rb.num = data_dict['num'].tolist()
 
         return rb    
 

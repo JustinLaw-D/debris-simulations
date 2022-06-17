@@ -89,8 +89,8 @@ class Cell:
 
         # save parameters
         csv_file = open(filepath + 'params.csv', 'w', newline='')
-        csv_writer = csv.writer(csv_file, dialec='unix')
-        csv_writer.write_row([self.num_sat_types, self.num_rb_types, self.alt, self.dh, self.v, self.v_orbit, self.num_L,
+        csv_writer = csv.writer(csv_file, dialect='unix')
+        csv_writer.writerow([self.num_sat_types, self.num_rb_types, self.alt, self.dh, self.v, self.v_orbit, self.num_L,
                               self.num_chi])
         csv_file.close()
 
@@ -103,7 +103,7 @@ class Cell:
         # write N_bins values
         N_dict = dict()
         for i in range(len(self.N_bins)):
-            dict[str(i)] = self.N_bins[i]
+            N_dict[str(i)] = self.N_bins[i]
         np.savez(filepath + "N_bins.npz", **N_dict)
 
         # write lethal table values
@@ -143,7 +143,7 @@ class Cell:
 
         # load parameters
         csv_file = open(filepath + 'params.csv', 'r', newline='')
-        csv_reader = csv.reader(csv_file, dialec='unix')
+        csv_reader = csv.reader(csv_file, dialect='unix')
         for row in csv_reader: # there's only one row, this extracts it
             cell.num_sat_types = int(row[0])
             cell.num_rb_types = int(row[1])
@@ -157,8 +157,8 @@ class Cell:
 
         # load basic arrays
         array_dict = np.load(filepath + "data.npz")
-        cell.C_l = array_dict['C_l'].to_list()
-        cell.C_nl = array_dict['C_nl'].to_list()
+        cell.C_l = array_dict['C_l'].tolist()
+        cell.C_nl = array_dict['C_nl'].tolist()
         cell.N_factor_table = array_dict['N_factor']
         cell.tau_N = array_dict['tau_N']
         cell.ascending = array_dict['ascending']

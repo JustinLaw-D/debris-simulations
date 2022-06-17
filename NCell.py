@@ -324,8 +324,8 @@ class NCell:
 
         # write parameters
         csv_file = open(true_path + 'params.csv', 'w', newline='')
-        csv_writer = csv.writer(csv_file, dialec='unix')
-        csv_writer.write_row([self.num_L, self.num_chi, self.time, len(self.cells)])
+        csv_writer = csv.writer(csv_file, dialect='unix')
+        csv_writer.writerow([self.num_L, self.num_chi, self.time, len(self.cells)])
         csv_file.close()
 
         # write easy arrays
@@ -349,7 +349,7 @@ class NCell:
         np.savez(true_path + "rb_expl_tables.npz", **rb_expl_tables)
 
         # save the Cells
-        for i in range(self.cells):
+        for i in range(len(self.cells)):
             cell_path = true_path + "cell" + str(i) + "/"
             os.mkdir(cell_path)
             self.cells[i].save(cell_path)
@@ -373,7 +373,7 @@ class NCell:
 
         # load parameters
         csv_file = open(filepath + 'params.csv', 'r', newline='')
-        csv_reader = csv.reader(csv_file, dialec='unix')
+        csv_reader = csv.reader(csv_file, dialect='unix')
         for row in csv_reader: # there's only one row, this extracts it
             atmos.num_L = int(row[0])
             atmos.num_chi = int(row[1])
@@ -383,9 +383,9 @@ class NCell:
 
         # load in simple numpy arrays
         array_dict = np.load(filepath + 'data.npz')
-        atmos.alts = array_dict['alts'].to_list()
-        atmos.dh = array_dict['dh'].to_list()
-        atmos.t = array_dict['t'].to_list()
+        atmos.alts = array_dict['alts'].tolist()
+        atmos.dh = array_dict['dh'].tolist()
+        atmos.t = array_dict['t'].tolist()
         atmos.logL_edges = array_dict['logL']
         atmos.chi_edges = array_dict['chi']
 
@@ -470,7 +470,7 @@ class NCell:
             S_in[0][i] = top_cell.satellites[i].lam
         S_din = np.zeros((len(self.cells)+1, num_sat_types))
         D_in = np.zeros((len(self.cells)+1, num_sat_types))
-        R_in = np.zeros((len(self.cells)+1, num_sat_types))
+        R_in = np.zeros((len(self.cells)+1, num_rb_types))
         N_in  = np.zeros((self.num_L, self.num_chi))
         if upper : N_in = top_Nin
 
@@ -478,7 +478,7 @@ class NCell:
         for i in range(-1, (-1)*(len(self.cells) + 1), -1):
             curr_cell = self.cells[i]
             dNdt[i] += N_in
-            dSdt[i], dS_ddt[i], dDdt[i], dRdt[i], S_in[i,:], S_din[i-1,:], D_in[i-1,:], R_in[i-1,:], N_in, sat_coll[i], RS_coll[i], R_coll[i], NS_coll[i], NR_coll[i], NS_expl[i], NR_expl[i] = curr_cell.dxdt_cell(time, S_din, D_in, R_in)
+            dSdt[i], dS_ddt[i], dDdt[i], dRdt[i], S_in[i,:], S_din[i-1,:], D_in[i-1,:], R_in[i-1,:], N_in, sat_coll[i], RS_coll[i], R_coll[i], NS_coll[i], NR_coll[i], NS_expl[i], NR_expl[i] = curr_cell.dxdt_cell(time)
             dNdt[i] -= N_in # loses debris decaying outs
             # simulate collisions and explosions
             for j in range(num_sat_types): # iterate through satellite types
