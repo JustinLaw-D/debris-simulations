@@ -465,9 +465,9 @@ class NCell:
             NR_expl.append([])
 
         # get initial D_in, N_in values
-        S_in = np.zeros(num_sat_types)
+        S_in = np.zeros((len(self.cells)+1, num_sat_types))
         for i in range(num_sat_types):
-            S_in[i] = top_cell.satellites[i].lam
+            S_in[0][i] = top_cell.satellites[i].lam
         S_din = np.zeros(num_sat_types)
         D_in = np.zeros(num_sat_types)
         R_in = np.zeros(num_rb_types)
@@ -478,7 +478,7 @@ class NCell:
         for i in range(-1, (-1)*(len(self.cells) + 1), -1):
             curr_cell = self.cells[i]
             dNdt[i] += N_in
-            dSdt[i], dS_ddt[i], dDdt[i], dRdt[i], S_in, S_din, D_in, R_in, N_in, sat_coll[i], RS_coll[i], R_coll[i], NS_coll[i], NR_coll[i], NS_expl[i], NR_expl[i] = curr_cell.dxdt_cell(time, S_in, S_din, D_in, R_in)
+            dSdt[i], dS_ddt[i], dDdt[i], dRdt[i], S_in[i,:], S_din, D_in, R_in, N_in, sat_coll[i], RS_coll[i], R_coll[i], NS_coll[i], NR_coll[i], NS_expl[i], NR_expl[i] = curr_cell.dxdt_cell(time, S_din, D_in, R_in)
             dNdt[i] -= N_in # loses debris decaying outs
             # simulate collisions and explosions
             for j in range(num_sat_types): # iterate through satellite types
@@ -525,6 +525,10 @@ class NCell:
             # add on debris lost to collisions
             dNdt[i] -= sum(NS_coll[i] + NR_coll[i])
 
+        # go through cells from bottom to top to correct values
+        for i in range(len(self.cells)):
+            dSdt[i] += S_in[i,:]
+
         # update values
         dCldt = []
         dCnldt = []
@@ -561,6 +565,7 @@ class NCell:
 
         while self.t[self.time] < T:
             dSdt, dS_ddt, dDdt, dRdt, dNdt, dCldt, dCnldt = self.dxdt(self.time, upper) # get current rates of change
+
             for i in range(len(self.cells)): # iterate through cells and update values
                 curr_cell = self.cells[i]
                 curr_cell.N_bins.append(curr_cell.N_bins[self.time] + dNdt[i]*dt)
