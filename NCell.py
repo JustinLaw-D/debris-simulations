@@ -305,7 +305,7 @@ class NCell:
                     curr_prob[i,j,k] = sum/num_dir
             curr_prob[i,:,:] *= self.cells[cell_index].N_factor_table # only count relevant debris
 
-    def save(self, filepath, name, compress=True, force=False):
+    def save(self, filepath, name, compress=True, gap=0, force=False):
         '''
         saves the current NCell object to .csv and .npz files
 
@@ -315,11 +315,13 @@ class NCell:
 
         Keyword Input(s):
         compress : whether or not to save the data in a compressed format (default True)
+        gap : largest acceptable time gap between saved data points (yr, default 0 i.e. save all data)
         force : whether or not to automatically replace any saved data with the same name (default False)
 
         Output(s): None
 
-        Note(s): drag_lifetime and events are lost
+        Note(s): drag_lifetime and events are lost. adherence to the "gap" value is approximate, and may behave
+        strangely if the time step is close to the gap size.
         '''
 
         true_path = filepath + name + '/'
@@ -337,12 +339,21 @@ class NCell:
         # write parameters
         csv_file = open(true_path + 'params.csv', 'w', newline='')
         csv_writer = csv.writer(csv_file, dialect='unix')
-        csv_writer.writerow([self.num_L, self.num_chi, self.time, len(self.cells)])
+        csv_writer.writerow([self.num_L, self.num_chi, len(self.cells)])
         csv_file.close()
 
         # write easy arrays
         alts_arr, dh_arr, t_arr = np.array(self.alts), np.array(self.dh), np.array(self.t)
-        to_save = {'alts' : alts_arr, 'dh' : dh_arr, 't' : t_arr, 'logL' : self.logL_edges, 'chi' : self.chi_edges}
+        filter = np.fill(t_arr.shape, False) # build filter based on time steps
+        if t_arr.size > 0:
+            prev_t = t_arr[0]
+            filter[0] = True
+            for i in range(1, t_arr.size):
+                if t_arr[i] - prev_t >= gap:
+                    prev_t = t_arr[i]
+                    filter[i] = True
+        to_save = {'alts' : alts_arr[filter], 'dh' : dh_arr[filter], 't' : t_arr[filter], 
+                   'logL' : self.logL_edges, 'chi' : self.chi_edges}
         if compress : np.savez_compressed(true_path + "data.npz", **to_save)
         else : np.savez(true_path + "data.npz", **to_save)
 
@@ -371,7 +382,7 @@ class NCell:
         for i in range(len(self.cells)):
             cell_path = true_path + "cell" + str(i) + "/"
             os.mkdir(cell_path)
-            self.cells[i].save(cell_path, compress=compress)
+            self.cells[i].save(cell_path, filter, compress=compress)
 
     def load(filepath):
         '''
@@ -396,7 +407,6 @@ class NCell:
         for row in csv_reader: # there's only one row, this extracts it
             atmos.num_L = int(row[0])
             atmos.num_chi = int(row[1])
-            atmos.time = int(row[2])
             num_cells = int(row[3])
         csv_file.close()
 
@@ -405,6 +415,7 @@ class NCell:
         atmos.alts = array_dict['alts'].tolist()
         atmos.dh = array_dict['dh'].tolist()
         atmos.t = array_dict['t'].tolist()
+        atmos.time = len(atmos.t) - 1 # set time to the end of the data
         atmos.logL_edges = array_dict['logL']
         atmos.chi_edges = array_dict['chi']
 

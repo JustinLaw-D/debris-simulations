@@ -56,12 +56,13 @@ class Satellite:
         self.expl_rate_L = expl_rate_L
         self.expl_rate_D = expl_rate_D
 
-    def save(self, filepath, compress=True):
+    def save(self, filepath, filter, compress=True):
         '''
         saves the current Satellite object to .csv and .npz files
 
         Input(s):
         filepath : explicit path to folder that the files will be saved in (string)
+        filter : array of which data points to keep or skip (array of booleans)
 
         Keyword Input(s):
         compress : whether or not to save the data in a compressed format (default True)
@@ -78,7 +79,7 @@ class Satellite:
         csv_file.close()
 
         # save data
-        S_array, Sd_array, D_array = np.array(self.S), np.array(self.S_d), np.array(self.D)
+        S_array, Sd_array, D_array = np.array(self.S)[filter], np.array(self.S_d)[filter], np.array(self.D)[filter]
         to_save = {'S' : S_array, 'S_d' : Sd_array, 'D' : D_array}
         if compress : np.savez_compressed(filepath + "data.npz", **to_save)
         else : np.savez(filepath + "data.npz", **to_save)
@@ -149,12 +150,13 @@ class RocketBody:
         self.C = C
         self.expl_rate = expl_rate
 
-    def save(self, filepath, compress=True):
+    def save(self, filepath, filter, compress=True):
         '''
         saves the current Rocket object to .csv and .npz files
 
         Input(s):
         filepath : explicit path to folder that the files will be saved in (string)
+        filter : array of which data points to keep or skip (array of booleans)
 
         Keyword Input(s):
         compress : whether or not to save the data in a compressed format (default True)
@@ -169,7 +171,7 @@ class RocketBody:
         csv_file.close()
 
         # save data
-        num_array = np.array(self.num)
+        num_array = np.array(self.num)[filter]
         to_save = {'num' : num_array}
         if compress : np.savez_compressed(filepath + "data.npz", **to_save)
         else : np.savez(filepath + "data.npz", **to_save)

@@ -73,19 +73,21 @@ class Cell:
             if sat.target_alt < self.alt - self.dh/2 : self.ascending.append(True)
             else : self.ascending.append(False)
 
-    def save(self, filepath, compress=True):
+    def save(self, filepath, filter, compress=True):
         '''
         saves the current Cell object to .csv and .npz files
 
         Input(s):
         filepath : explicit path to folder that the files will be saved in (string)
+        filter : array of which data points to keep or skip (array of booleans)
 
         Keyword Input(s):
         compress : whether or not to save the data in a compressed format (default True)
 
         Output(s): None
 
-        Note(s): event_list is lost
+        Note(s): event_list is lost, filter should be the same size as the t array from
+                 NCell.
         '''
 
         # save parameters
@@ -96,7 +98,7 @@ class Cell:
         csv_file.close()
 
         # write easy arrays
-        Cl_array, Cnl_array = np.array(self.C_l), np.array(self.C_nl)
+        Cl_array, Cnl_array = np.array(self.C_l)[filter], np.array(self.C_nl)[filter]
         to_save = {'C_l' : Cl_array, 'C_nl' : Cnl_array, 'N_factor' : self.N_factor_table, 'tau_N' : self.tau_N, 
                    'ascending' : self.ascending, 'logL' : self.logL_edges, 'chi' : self.chi_edges}
         if compress : np.savez_compressed(filepath + "data.npz", **to_save)
@@ -104,8 +106,11 @@ class Cell:
 
         # write N_bins values
         N_dict = dict()
+        index = 0
         for i in range(len(self.N_bins)):
-            N_dict[str(i)] = self.N_bins[i]
+            if filter[i]:
+                N_dict[str(index)] = self.N_bins[i]
+                index += 1
         if compress : np.savez_compressed(filepath + "N_bins.npz", **N_dict)
         else : np.savez(filepath + "N_bins.npz", **N_dict)
 
@@ -122,11 +127,11 @@ class Cell:
         for i in range(self.num_sat_types):
             sat_path = filepath + 'Satellite' + str(i) + '/'
             os.mkdir(sat_path)
-            self.satellites[i].save(sat_path, compress=compress)
+            self.satellites[i].save(sat_path, filter, compress=compress)
         for i in range(self.num_rb_types):
             rb_path = filepath + 'RocketBody' + str(i) + '/'
             os.mkdir(rb_path)
-            self.rockets[i].save(rb_path, compress=compress)
+            self.rockets[i].save(rb_path, filter, compress=compress)
 
     def load(filepath):
         '''
