@@ -72,7 +72,7 @@ def density(alt,t,mo0,setF107=None):
     except:
        logalt = 0.
  
-    mo_frac = t/12 + mo0
+    mo_frac = t*12 + mo0
 
     mo = mo_frac % 144
 

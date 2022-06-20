@@ -120,6 +120,7 @@ class NCell:
         self.drag_lifetime = drag_lifetime
         self.update_lifetime = update_lifetime
         self.time = 0 # index of current time step
+        self.lupdate_time = 0 # index of last time drag lifetimes were updated
         self.t = [0] # list of times traversed
         self.cells = [] # start list of cells
         # generate bins for log10(L), chi
@@ -315,7 +316,7 @@ class NCell:
             for j in range(self.num_L): # iterate through bins
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
                 ave_L = 10**((bin_bot_L+bin_top_L)/2)
-                curr_prob[:, j, :] = L_cdf(10**bin_top_L, L_min, L_max, e_typ) - L_cdf(10**bin_bot_L, L_min, L_max, e_typ) # probability of L being in this bin
+                curr_prob[:,j, :] = L_cdf(10**bin_top_L, L_min, L_max, e_typ) - L_cdf(10**bin_bot_L, L_min, L_max, e_typ) # probability of L being in this bin
                 for k in range(self.num_chi):
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi+bin_top_chi)/2
@@ -437,6 +438,7 @@ class NCell:
         atmos.dh = array_dict['dh'].tolist()
         atmos.t = array_dict['t'].tolist()
         atmos.time = len(atmos.t) - 1 # set time to the end of the data
+        atmos.lupdate_time = atmos.time
         atmos.logL_edges = array_dict['logL']
         atmos.chi_edges = array_dict['chi']
 
@@ -618,6 +620,9 @@ class NCell:
         self.sim_events() # run initial discrete events
 
         while self.t[self.time] < T:
+            if self.update_lifetime(self.t[self.time], self.t[self.lupdate_time]):
+                    self.update_lifetimes(self.t[self.time])
+                    self.lupdate_time = self.time
             dSdt, dS_ddt, dDdt, dRdt, dNdt, dCldt, dCnldt = self.dxdt(self.time, upper) # get current rates of change
 
             for i in range(len(self.cells)): # iterate through cells and update values
