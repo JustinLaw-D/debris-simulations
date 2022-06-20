@@ -246,10 +246,13 @@ class Cell:
 
         # compute the rate of collisions from each debris type
         dSdt = [] # collisions with live satallites
-        dSDdt = np.zeros((self.num_sat_types, self.num_sat_types)) # collisions between live and derelict satallites
+        dSSdt = np.zeros((self.num_sat_types, self.num_sat_types)) # collisions between live satellites
+        dSS_ddt = np.zeros((self.num_sat_types, self.num_sat_types)) # collisions between live and de-orbiting satellites
+        dSDdt = np.zeros((self.num_sat_types, self.num_sat_types)) # collisions between live and derelict satellites
         dSRdt = np.zeros((self.num_sat_types, self.num_rb_types)) # collisions between live satellites and rocket bodies
         # first index is live satellite type, second is derelict/rocket type
         dS_ddt = [] # collisions with de-orbiting satallites
+        dS_ddS_ddt = np.zeros((self.num_sat_types, self.num_sat_types)) # collisions between de-orbiting satellites
         dS_dDdt = np.zeros((self.num_sat_types, self.num_sat_types)) # collisions between de-orbiting and derelict satallites
         dS_dRdt = np.zeros((self.num_sat_types, self.num_rb_types)) # collisions between de-orbiting satellites and rocket bodies
         dDdt = [] # collisions with derelict satallites
@@ -287,7 +290,10 @@ class Cell:
             S_d = self.satellites[i].S_d[time]
             D = self.satellites[i].D[time]
             sigma = self.satellites[i].sigma
-            alpha = self.satellites[i].alpha
+            alphaS = self.satellites[i].alphaS
+            alphaD = self.satellites[i].alphaD
+            alphaN = self.satellites[i].alphaN
+            alphaR = self.satellites[i].alphaR
             expl_rate_L = self.satellites[i].expl_rate_L
             expl_rate_D = self.satellites[i].expl_rate_D
 
@@ -296,27 +302,37 @@ class Cell:
                 ave_L = 10**((self.logL_edges[j] + self.logL_edges[j+1])/2) # average L value for these bins
                 for k in range(self.num_chi):
                     if self.N_factor_table[j,k] != 0: # only calculate for non-ignored bins
-                        dSdt[i][j,k], dS_ddt[i][j,k], dDdt[i][j,k] = self.N_sat_events(S, S_d, D, N[j,k], sigma, alpha, ave_L)
+                        dSdt[i][j,k], dS_ddt[i][j,k], dDdt[i][j,k] = self.N_sat_events(S, S_d, D, N[j,k], sigma, alphaN, ave_L)
         
             # compute collisions involving only satellities
             tot_S_sat_coll = 0 # total collisions destroying live satellites of this type
             tot_Sd_sat_coll = 0 # total collisions destroying de-orbiting satellites of this type
             tot_D_sat_coll = 0 # total collisions destroying derelicts of this type
             for j in range(self.num_sat_types):
+                S2 = self.satellites[j].S[time]
+                S_d2 = self.satellites[j].S_d[time]
                 D2 = self.satellites[j].D[time]
                 sigma2 = self.satellites[j].sigma
-                dSDdt[i,j], dS_dDdt[i,j], dDDdt[i,j] = self.SColl_events(S, S_d, D, sigma, alpha, D2, sigma2)
-                if i > j: dDDdt[i,j] = 0 # avoid double counting
-                tot_S_sat_coll += dSDdt[i,j]
-                tot_Sd_sat_coll += dS_dDdt[i,j]
-                if i == j : tot_D_sat_coll += dSDdt[j,i] + dS_dDdt[j,i] + 2*dDDdt[i,j]
-                else : tot_D_sat_coll += dSDdt[j,i] + dS_dDdt[j,i] + dDDdt[i,j]
+                alphaS2 = self.satellites[j].alphaS
+                dSSdt[i,j], dSS_ddt[i,j], dS_ddS_ddt[i,j], dSDdt[i,j], dS_dDdt[i,j], dDDdt[i,j] = self.SColl_events(S, S_d, D, sigma, alphaS, alphaD, S2, S_d2, D2, sigma2, alphaS2)
+                if i > j: # avoid double counting
+                    dSSdt[i,j] = 0
+                    dS_ddS_ddt[i,j] = 0
+                    dDDdt[i,j] = 0
+                if i == j :
+                    tot_S_sat_coll += 2*dSSdt[i,j] + dSS_ddt[i,j] + dSDdt[i,j]
+                    tot_Sd_sat_coll += dSS_ddt[j,i] + 2*dS_ddS_ddt[i,j] + dS_dDdt[i,j]
+                    tot_D_sat_coll += dSDdt[j,i] + dS_dDdt[j,i] + 2*dDDdt[i,j]
+                else : 
+                    tot_S_sat_coll += dSSdt[i,j] + dSS_ddt[i,j] + dSDdt[i,j]
+                    tot_Sd_sat_coll += dSS_ddt[j,i] + dS_ddS_ddt[i,j] + dS_dDdt[i,j]
+                    tot_D_sat_coll += dSDdt[j,i] + dS_dDdt[j,i] + dDDdt[i,j]
 
             # compute collisions between satellites and rocket bodies
             for j in range(self.num_rb_types):
                 R = self.rockets[j].num[time]
                 sigma2 = self.rockets[j].sigma
-                dSRdt[i,j], dS_dRdt[i,j], dDRdt[i,j] = self.SRColl_events(S, S_d, D, sigma, alpha, R, sigma2)
+                dSRdt[i,j], dS_dRdt[i,j], dDRdt[i,j] = self.SRColl_events(S, S_d, D, sigma, alphaR, R, sigma2)
                 tot_S_sat_coll += dSRdt[i,j]
                 tot_Sd_sat_coll += dS_dDdt[i,j]
                 tot_D_sat_coll += dRdt[i,j]
@@ -377,7 +393,7 @@ class Cell:
                 if self.N_factor_table[i,j] != 0: # only calculate for non-ignored bins
                     decay_N[i][j] = N[i,j]/self.tau_N[i,j]
 
-        D_dt = dSDdt + dS_dDdt + dDDdt
+        D_dt = dSSdt + dSS_ddt + dSDdt + dS_ddS_ddt + dS_dDdt + dDDdt
         RD_dt = dSRdt + dS_dRdt + dDRdt
         R_dt = dRRdt
         expl_S_tot = expl_S + expl_Sd + expl_D
@@ -444,7 +460,7 @@ class Cell:
 
         return n*sigma*v*R
 
-    def SColl_events(self, S1, S_d1, D1, sigma1, alpha1, D2, sigma2):
+    def SColl_events(self, S1, S_d1, D1, sigma1, alphaS1, alphaD1, S2, S_d2, D2, sigma2, alphaS2):
         '''
         calculates the rate of collisions between satellites of two particular types
         in a band
@@ -454,14 +470,21 @@ class Cell:
         S_d1 : number of de-orbiting satellites of type 1
         D1 : number of derelict satellites of type 1
         sigma1 : cross-section of satellites of type 1 (m^2)
-        alpha1 : fraction of collisions a live satellites of type 1 fails to avoid
+        alphaS1 : fraction of collisions with a live satellite that a live satellites of type 1 fails to avoid
+        alphaD1 : fraction of collisions with a derelict that a live satellites of type 1 fails to avoid
+        S2 : number of live satellites of type 2
+        S_d2 : number of de-orbiting satellites of type 2
         D2 : number of derelict satellites of type 2
         sigma2 : cross-section of satellites of type 2 (m^2)
+        alphaS2 : fraction of collisions with a live satellite that a live satellites of type 2 fails to avoid
 
         Keyword Parameter(s): None
 
         Output(s):
+        dSSdt : rate of collision between live satellites of type 1 and live satellites of type 2 (1/yr)
+        dSS_ddt : rate of collision between live satellites of type 1 and de-orbiting satellites of type 2 (1/yr)
         dSDdt : rate of collision between live satellites of type 1 and derelicts of type 2 (1/yr)
+        dS_dS_ddt : rate of collision between de-orbiting satellites of type 1 and de-orbiting satellites of type 2 (1/yr)
         dS_dDdt : rate of collision between de-orbiting satellites of type 1 and derelicts of type 2 (1/yr)
         dDDdt : rate of collision between derelict satellites of type 1 and derelicts of type 2 (1/yr)
         '''
@@ -471,13 +494,15 @@ class Cell:
         sigma = sigma1 + sigma2 + 2*np.sqrt(sigma1*sigma2) # account for increased cross-section
         v = self.v*365.25*24*60*60 # convert to km/yr
         V = 4*np.pi*(6371 + self.alt)**2*self.dh # volume of the shell
-        n = D2/V # number density of the derelicts
 
         # rate of collisions between derelicts and satallites (live/derelict)
-        dSDdt = alpha1*n*sigma*v*S1
-        dS_dDdt = alpha1*n*sigma*v*S_d1
-        dDDdt = n*sigma*v*D1  # collisions cannot be avoided
-        return dSDdt, dS_dDdt, dDDdt
+        dSSdt = alphaS1*alphaS2*sigma*v*S1*S2/V
+        dSS_ddt = alphaS1*alphaS2*sigma*v*S1*S_d2/V
+        dSDdt = alphaD1*sigma*v*S1*D2/V
+        dS_dS_ddt = alphaS1*alphaS2*sigma*v*S_d1*S_d2/V
+        dS_dDdt = alphaD1*sigma*v*S_d1*D2/V
+        dDDdt = sigma*v*D1*D2/V  # collisions cannot be avoided
+        return dSSdt, dSS_ddt, dSDdt, dS_dS_ddt, dS_dDdt, dDDdt
 
     def SRColl_events(self, S1, S_d1, D1, sigma1, alpha1, R, sigma2):
         '''

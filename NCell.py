@@ -18,8 +18,9 @@ class NCell:
 
     def __init__(self, S, S_d, D, N_l, target_alts, alts, dh, lam, drag_lifetime, events=[], R_i=None, lam_rb=None, 
                 up_time=None, del_t=None, expl_rate_L=None, expl_rate_D=None, C_sat=None, sigma_sat=None, expl_rate_R=None, 
-                C_rb=None, sigma_rb=None, v=None, delta=None, alpha=None, P=None, m_s=None, m_rb=None, AM_sat=None, AM_rb=None, 
-                tau_do=None, tau_min=None, L_min=1e-3, L_max=1, num_L=10, chi_min=-2, chi_max=2, num_chi=10, num_dir=100):
+                C_rb=None, sigma_rb=None, v=None, delta=None, alphaS=None, alphaD=None, alphaN=None, alphaR=None, P=None, 
+                m_s=None, m_rb=None, AM_sat=None, AM_rb=None, tau_do=None, tau_min=None, L_min=1e-3, L_max=1, num_L=10, 
+                chi_min=-2, chi_max=2, num_chi=10, num_dir=100):
         '''
         Constructor for NCell class
     
@@ -52,7 +53,14 @@ class NCell:
         sigma_rb : rocket cross-section of each type (list, m^2, default 10m^2)
         v : relative collision speed in each shell (list, km/s, default 10km/s)
         delta : initial ratio of the density of disabling to catestrophic debris in each shell (list, default 10)
-        alpha : fraction of collisions a live satellites of each type fails to avoid in each shell (list of lists, default 0.2)
+        alphaS : fraction of collisions with another live satellite that a live satellites of each type fails to 
+                 avoid in each shell (list of lists, default 0)
+        alphaD : fraction of collisions with another derelict that a live satellites of each type fails to 
+                 avoid in each shell (list of lists, default alphaN)
+        alphaN : fraction of collisions with trackable debris that a live satellites of each type fails to 
+                 avoid in each shell (list of lists, default 0.2)
+        alphaS : fraction of collisions with a rocket body that a live satellites of each type fails to 
+                 avoid in each shell (list of lists, default alphaN)
         P : post-mission disposal probability for satellites of each type in each shell (list of lists, default 0.95)
         m_s : mass of the satallites of each type (list, kg, default 250kg)
         m_s : mass of the rocket bodies of each type (list, kg, default 250kg)
@@ -92,8 +100,14 @@ class NCell:
             v = [None]*len(S)
         if delta is None:
             delta = [10]*len(S)
-        if alpha is None:
-            alpha = [None]*len(S)
+        if alphaS is None:
+            alphaS = [None]*len(S)
+        if alphaD is None:
+            alphaD = [None]*len(S)
+        if alphaN is None:
+            alphaN = [None]*len(S)
+        if alphaR is None:
+            alphaR = [None]*len(S)
         if P is None:
             P = [None]*len(S)
         if tau_do is None:
@@ -139,8 +153,14 @@ class NCell:
                 C_rb = [None]*len(R_i[i])
             if sigma_rb is None:
                 sigma_rb = [None]*len(R_i[i])
-            if alpha[i] is None:
-                alpha[i] = [None]*len(S[i])
+            if alphaS[i] is None:
+                alphaS[i] = [None]*len(S[i])
+            if alphaD[i] is None:
+                alphaD[i] = [None]*len(S[i])
+            if alphaN[i] is None:
+                alphaN[i] = [None]*len(S[i])
+            if alphaR[i] is None:
+                alphaR[i] = [None]*len(S[i])
             if P[i] is None:
                 P[i] = [None]*len(S[i])
             if m_s is None:
@@ -171,8 +191,14 @@ class NCell:
                     C_sat[j] = 1
                 if sigma_sat[j] is None:
                     sigma_sat[j] = 10
-                if alpha[i][j] is None:
-                    alpha[i][j] = 0.2
+                if alphaS[i][j] is None:
+                    alphaS[i][j] = 0
+                if alphaN[i][j] is None:
+                    alphaN[i][j] = 0.2
+                if alphaD[i][j] is None:
+                    alphaD[i][j] = alphaN[i][j]
+                if alphaR[i][j] is None:
+                    alphaR[i][j] = alphaN[i][j]
                 if P[i][j] is None:
                     P[i][j] = 0.95
                 if m_s[j] is None:
@@ -185,8 +211,8 @@ class NCell:
                 if tau_do[i][j] is None:
                     tau_do[i][j] = tau/10
                 sat = Satellite(S[i][j], S_d[i][j], D[i][j], m_s[j], sigma_sat[j], lam[j], del_t[i][j],
-                                tau_do[i][j], target_alts[j], up_time[i][j], alpha[i][j], P[i][j], AM_sat[j],
-                                tau, C_sat[j], expl_rate_L[j], expl_rate_D[j])
+                                tau_do[i][j], target_alts[j], up_time[i][j], alphaS[i][j], alphaD[i][j],
+                                alphaN[i][j], alphaR[i][j], P[i][j], AM_sat[j], tau, C_sat[j], expl_rate_L[j], expl_rate_D[j])
                 sat_list.append(sat)
 
             rb_list = []

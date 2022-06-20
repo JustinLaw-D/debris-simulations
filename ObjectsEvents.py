@@ -21,7 +21,9 @@ class Satellite:
         tau_do : mean time for satellite to de-orbit from shell (yr)
         target_alt : target final altitude for the satellite type (km)
         up_time : amount of time it takes a satellite to ascend through the band (yr)
-        alpha : fraction of collisions a live satellites fails to avoid
+        alpha : tuple of (alphaS, alphaD, alphaN, alphaR), which are the fraction of collisions a
+                live satellite fails to avoid with a live satellite, derelict, trackable debris,
+                and rocket body respectively
         P : post-mission disposal probability
         AM : area-to-mass ratio of the satellite (m^2/kg)
         tau : atmospheric drag lifetime of a satellite (yr)
@@ -48,7 +50,7 @@ class Satellite:
         self.tau_do = tau_do
         self.target_alt = target_alt
         self.up_time = up_time
-        self.alpha = alpha
+        self.alphaS, self.alphaD, self.alphaN, self.alphaR = alpha
         self.P = P
         self.AM = AM
         self.tau = tau
@@ -74,8 +76,8 @@ class Satellite:
         csv_file = open(filepath + 'params.csv', 'w', newline='')
         csv_writer = csv.writer(csv_file, dialect='unix')
         csv_writer.writerow([self.m, self.sigma, self.lam, self.del_t, self.tau_do, self.target_alt, 
-                             self.up_time, self.alpha, self.P, self.AM, self.tau, self.C, self.expl_rate_L,
-                             self.expl_rate_D])
+                             self.up_time, self.alphaS, self.alphaD, self.alphaN, self.alphaR, self.P, 
+                             self.AM, self.tau, self.C, self.expl_rate_L, self.expl_rate_D])
         csv_file.close()
 
         # save data
@@ -104,9 +106,10 @@ class Satellite:
         csv_reader = csv.reader(csv_file, dialect='unix')
         for row in csv_reader: # there's only one row, but this extracts it
             sat.m, sat.sigma, sat.lam, sat.del_t = float(row[0]), float(row[1]), float(row[2]), float(row[3])
-            sat.tau_do, sat.target_alt, sat.up_time, sat.alpha = float(row[4]), float(row[5]), float(row[6]), float(row[7])
-            sat.P, sat.AM, sat.tau, sat.C = float(row[8]), float(row[9]), float(row[10]), float(row[11])
-            sat.expl_rate_L, sat.expl_rate_D = float(row[12]), float(row[13])
+            sat.tau_do, sat.target_alt, sat.up_time, sat.alphaS = float(row[4]), float(row[5]), float(row[6]), float(row[7])
+            sat.alphaD, sat.alphaN, sat.alphaR, sat.P = float(row[8]), float(row[9]), float(row[10]), float(row[11])
+            sat.AM, sat.tau, sat.C, sat.expl_rate_L = float(row[12]), float(row[13]), float(row[14]), float(row[15])
+            sat.expl_rate_D = float(row[16])
         csv_file.close()
 
         # load data
