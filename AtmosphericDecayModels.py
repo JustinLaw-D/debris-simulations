@@ -6,72 +6,118 @@ G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
 Me = 5.97219e24 # mass of Earth (kg)
 Re = 6371 # radius of Earth (km)
 
-altitudes = list(range(100, 901, 20)) # altitudes used by the model (km)
-# density for low activity (kg/m^3)
-rho_low = [5.31e-7,2.18e-8,3.12e-9,9.17e-10,3.45e-10,1.47e-10,6.96e-11,3.54e-11,1.88e-11,1.03e-11,5.86e-12,3.40e-12,2.02e-12,1.22e-12,7.46e-13,4.63e-13,2.92e-13,1.87e-13,1.21e-13,8.04e-14,5.44e-14,3.77e-14,2.68e-14,1.96e-14,1.47e-14,1.14e-14,9.10e-15,7.41e-15,6.16e-15,5.22e-15,4.50e-15,3.93e-15,3.48e-15,3.10e-15,2.79e-15,2.53e-15,2.30e-15,2.11e-15,1.94e-15,1.78e-15,1.65e-15] 
-# density for high activity (kg/m^3)
-rho_high = [5.44e-7,2.45e-8,4.32e-9,1.54e-9,7.40e-10,4.10e-10,2.46e-10,1.56e-10,1.04e-10,7.12e-11,5.00e-11,3.59e-11,2.61e-11,1.93e-11,1.44e-11,1.09e-11,8.32e-12,6.40e-12,4.96e-12,3.87e-12,3.04e-12,2.40e-12,1.91e-12,1.52e-12,1.22e-12,9.82e-13,7.93e-13,6.43e-13,5.22e-13,4.25e-13,3.47e-13,2.84e-13,2.34e-13,1.92e-13,1.59e-13,1.32e-13,1.10e-13,9.21e-14,7.72e-14,6.50e-14,5.49e-14]
+# read density model
+atmfile=open("cira-2012.dat","r")
+header=atmfile.readline()
+zmodel=[]
+denmodelL=[]
+denmodelM=[]
+denmodelHL=[]
+for line in atmfile:
+  alt,low,med,highL,_=line.split()
+  zmodel.append(float(alt))
+  denmodelL.append(float(low))
+  denmodelM.append(float(med))
+  denmodelHL.append(float(highL))
 
-# convert altitudes to m
-rho_lowl = np.log10(rho_low)
-rho_highl = np.log10(rho_high)
-altitudesl = np.log10(altitudes) + 3
+atmfile.close()
 
-def density(alt, t, phase, ave_phase):
+zmodel=np.array(zmodel)*1000 # convert to m
+denmodelL=np.array(denmodelL)
+denmodelM=np.array(denmodelM)
+denmodelHL=np.array(denmodelHL)
+
+logdenL = np.log10(denmodelL)
+logdenM = np.log10(denmodelM)
+logdenHL = np.log10(denmodelHL)
+logz = np.log10(zmodel)
+
+# read solar cycle template (using F10.7 as the solar activity index)
+f107file = open("solar_cycle_table36_cira2012.dat","r")
+header=f107file.readline()
+f107_mo=[]
+for line in f107file:
+   mo,_,f107,_,_,_,_,_,_,_,_,_,_=line.split()
+   f107_mo.append(float(f107))
+f107file.close()
+f107_mo=np.array(f107_mo) 
+
+def density(alt,t,mo0,setF107=None):
     '''
     Calculates the atmospheric density at a given altitude via interpolation
 
     Parameter(s):
     alt : altitude (km)
     t : time since arbitrary start point (yr)
-    phase : phase of the solar cycle at t = 0 (rad)
-    ave_phase : average value over all phases (bool)
+    m0 : starting month in the solar cycle (int)
 
-    Keyword Parameter(s): None
+    Keyword Parameter(s):
+    setF107 : if not None, value taken for solar flux regardless of current time
+              (None or 10^(-22)W/m^2, default None)
 
     Output(s):
     rho : atmospheric density at the given altitude and time (kg/m^3)
     '''
-    index = int((alt - 100)/20) # calculate index for the altitude
-    if index < 0: index = 0
-    elif index > len(altitudes) - 2: index = len(altitudes) - 2
-    try: 
-        altl = np.log10(alt) + 3
+
+    i=int(alt/20)-1 # calculate index for altitude
+    if i > len(zmodel)-2: i=len(zmodel)-2
+    if i < 0: i=0
+
+    try:
+       logalt = np.log10(alt) + 3 # convert to m
     except:
-        altl = 0
-    
-    # interpolate for low and high solar activity
-    low_estimate = 10**(rho_lowl[index] + (rho_lowl[index+1]-rho_lowl[index])/(altitudesl[index+1]-altitudesl[index])*(altl-altitudesl[index]))
-    high_estimate = 10**(rho_highl[index] + (rho_highl[index+1]-rho_highl[index])/(altitudesl[index+1]-altitudesl[index])*(altl-altitudesl[index]))
+       logalt = 0.
+ 
+    mo_frac = t/12 + mo0
 
-    # calculate weighting factor between low and high activity
-    if not ave_phase: w = np.sin(t*2*np.pi/22+phase)**2
-    else: w = ((11-np.sin(2*(11+np.pi*t/11))/2)/2 - (0-np.sin(2*(0+np.pi*t/11))/2)/2)/11
+    mo = mo_frac % 144
 
-    rho = low_estimate*(1-w) + high_estimate*w
+    moID = int(mo)
 
+    if setF107==None: # get flux value
+       moID1 = moID+1
+       if moID1>143:moID1=0
+       F107 = f107_mo[moID] + (f107_mo[moID1]-f107_mo[moID])*(mo-moID)
+    else: F107 = setF107
+
+    if F107 <= 65: # interpolate to get density value
+       rho = 10.**(  logdenL[i]+(logdenL[i+1]-logdenL[i])/(logz[i+1]-logz[i])*(logalt-logz[i]) )
+
+    elif F107 <= 140:
+      d0 = 10.**(  logdenL[i]+(logdenL[i+1]-logdenL[i])/(logz[i+1]-logz[i])*(logalt-logz[i]) )
+      d1 = 10.**(  logdenM[i]+(logdenM[i+1]-logdenM[i])/(logz[i+1]-logz[i])*(logalt-logz[i]) )
+      rho = d0 + (d1-d0)*(F107-65.)/75.
+
+    elif F107 <= 250:
+      d0 = 10.**(  logdenM[i]+(logdenM[i+1]-logdenM[i])/(logz[i+1]-logz[i])*(logalt-logz[i]) )
+      d1 = 10.**(  logdenHL[i]+(logdenHL[i+1]-logdenHL[i])/(logz[i+1]-logz[i])*(logalt-logz[i]) )
+      rho = d0 + (d1-d0)*(F107-140.)/110.
+
+    else:
+      rho = 10.**(  logdenHL[i]+(logdenHL[i+1]-logdenHL[i])/(logz[i+1]-logz[i])*(logalt-logz[i]) )
     return rho
 
-def dadt(alt, t, phase, a_over_m, CD, ave_phase):
+def dadt(alt, t, m0, a_over_m, CD, setF107=None):
     '''
     Calculates the rate of change in the altitude of a circular orbit
 
     Parameter(s):
     alt : altitude of the orbit (km)
     t : time passed since the start of the solar cycle (yr)
-    phase : initial phase of the solar cycle
+    m0 : starting month in the solar cycle (int)
     a_over_m : area-to-mass ratio of the object (m^2/kg)
     CD : drag coefficient of the object
-    ave_phase : average value over all phases (bool)
 
-    Keyword Parameter(s): None
+    Keyword Parameter(s):
+    setF107 : if not None, value taken for solar flux regardless of current time
+              (None or 10^(-22)W/m^2, default None)
 
     Outputs:
     dadt value (km/yr)
     '''
-    return -(CD*density(alt, t, phase, ave_phase)*a_over_m*np.sqrt(G*Me*(alt + Re)*1e3))*60*60*24*365.25*1e-3
+    return -(CD*density(alt, t, m0, setF107=setF107)*a_over_m*np.sqrt(G*Me*(alt + Re)*1e3))*60*60*24*365.25*1e-3
 
-def drag_lifetime(alt_i, alt_f, diameter, rho_m, a_over_m=None, CD=2.2, dt=1/365.25, phase=0, mindt=0, maxdt=None, dtfactor=1/100, tmax=np.inf, ave_phase=False):
+def drag_lifetime(alt_i, alt_f, diameter, rho_m, a_over_m=None, CD=2.2, dt=1/365.25, m0=0, mindt=0, maxdt=None, dtfactor=1/100, tmax=np.inf, F107=None):
     '''
     Estimates the drag lifetime of an object at altitude alt_i to degrade to altitude alt_f
 
@@ -85,12 +131,13 @@ def drag_lifetime(alt_i, alt_f, diameter, rho_m, a_over_m=None, CD=2.2, dt=1/365
     a_over_m : area-to-mass ratio of the object (m^2/kg, default None)
     CD : drag coefficient of the object (default 2.2)
     dt : initial time step of the integration (yr, default 1/365.25)
-    phase : initial phase in the solar cycle, ignored if ave_phase=True (yr, default 0)
+    m0 : starting month in the solar cycle (int, default 0)
     mindt : minimum time step for integration (yr, default 0)
     maxdt : maximum time step of the integration (yr, default None)
     dtfactor : fraction of altitude/rate of change to take as dt (default 1/100)
     tmax : maximum time to search to (yr, default infinite)
-    ave_phase : average value over all phases (default False)
+    setF107 : if not None, value taken for solar flux regardless of current time
+              (None or 10^(-22)W/m^2, default None)
 
     Output(s):
     tau : drag lifetime, possibly infinite (yr)
@@ -106,9 +153,9 @@ def drag_lifetime(alt_i, alt_f, diameter, rho_m, a_over_m=None, CD=2.2, dt=1/365
 
     # integrate using predictor-corrector method
     while alt > alt_f:
-        dadt0 = dadt(alt, time, phase, a_over_m, CD, ave_phase)
+        dadt0 = dadt(alt, time, m0, a_over_m, CD, F107=F107)
         alt1 = alt + dadt0*dt
-        dadt1 = dadt(alt1, time, phase, a_over_m, CD, ave_phase)
+        dadt1 = dadt(alt1, time, m0, a_over_m, CD, F107=F107)
         ave_dadt = (dadt0 + dadt1)/2
         alt += ave_dadt*dt
         time += dt
@@ -122,35 +169,3 @@ def drag_lifetime(alt_i, alt_f, diameter, rho_m, a_over_m=None, CD=2.2, dt=1/365
             if time > tmax : return np.inf
 
     return time
-
-def shell_ave_lifetime(alt, dh, a_to_m, CD, ave_phases=True, start_alts=None):
-    '''
-    Calculates the lifetime of a object in circular orbit in a shell of altitude alt
-    and thickness dh, averaging over starting altitude and a range of object parameters
-
-    Parameter(s):
-    alt : altitude of the centre of the shell (km)
-    dh : thickness of the shell (km)
-    a_to_m : array of area-to-mass values to average over (m^2/kg)
-    CD : array of drag coefficients to average over
-
-    Keyword Parameter(s):
-    ave_phases : weather or not to average over the initial solar phase (default False)
-    start_alts : array of starting altitudes to average over (km, default None)
-
-    Note: the altitudes in start_alts are assumed to be larger than alt - dh/2, behaviour
-    is undefined if this assumption is not met.
-    '''
-
-    if start_alts == None: # standard starting altitudes to average over
-        alts0 = np.linspace(alt - dh/2, alt, 10)
-        alts1 = np.linspace(alt, alt + dh/2, 20)
-        start_alts = np.concatenate(alts0, alts1)
-
-    total = 0 # sum of all drag coefficients calculated
-    num = len(start_alts)*len(a_to_m)*len(CD) # total number of drag coefficients calculated
-    for start in start_alts:
-        for am in a_to_m:
-            for C in CD:
-                total += drag_lifetime(start, alt-dh/2, 0, 0, a_over_m=am, CD=C, ave_phase=ave_phases)
-    return total/num
