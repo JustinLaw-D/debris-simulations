@@ -1,13 +1,17 @@
 # contains models for atmospheric density, drag lifetime
 
+import os
 import numpy as np
 
 G = 6.67430e-11 # gravitational constant (N*m^2/kg^2)
 Me = 5.97219e24 # mass of Earth (kg)
 Re = 6371 # radius of Earth (km)
 
+filepath, _ = os.path.split(__file__) # path to current folder
+filepath += '/'
+
 # read density model
-atmfile=open("atmosphere_data/cira-2012.dat","r")
+atmfile=open(filepath + "atmosphere_data/cira-2012.dat","r")
 header=atmfile.readline()
 zmodel=[]
 denmodelL=[]
@@ -33,7 +37,7 @@ logdenHL = np.log10(denmodelHL)
 logz = np.log10(zmodel)
 
 # read solar cycle template (using F10.7 as the solar activity index)
-f107file = open("atmosphere_data/solar_cycle_table36_cira2012.dat","r")
+f107file = open(filepath + "atmosphere_data/solar_cycle_table36_cira2012.dat","r")
 header=f107file.readline()
 f107_mo=[]
 for line in f107file:

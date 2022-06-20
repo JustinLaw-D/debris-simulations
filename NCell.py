@@ -211,8 +211,8 @@ class NCell:
                 if tau_do[i][j] is None:
                     tau_do[i][j] = tau/10
                 sat = Satellite(S[i][j], S_d[i][j], D[i][j], m_s[j], sigma_sat[j], lam[j], del_t[i][j],
-                                tau_do[i][j], target_alts[j], up_time[i][j], alphaS[i][j], alphaD[i][j],
-                                alphaN[i][j], alphaR[i][j], P[i][j], AM_sat[j], tau, C_sat[j], expl_rate_L[j], expl_rate_D[j])
+                                tau_do[i][j], target_alts[j], up_time[i][j], (alphaS[i][j], alphaD[i][j],
+                                alphaN[i][j], alphaR[i][j]), P[i][j], AM_sat[j], tau, C_sat[j], expl_rate_L[j], expl_rate_D[j])
                 sat_list.append(sat)
 
             rb_list = []
