@@ -344,7 +344,7 @@ class NCell:
 
         # write easy arrays
         alts_arr, dh_arr, t_arr = np.array(self.alts), np.array(self.dh), np.array(self.t)
-        filter = np.fill(t_arr.shape, False) # build filter based on time steps
+        filter = np.full(t_arr.shape, False) # build filter based on time steps
         if t_arr.size > 0:
             prev_t = t_arr[0]
             filter[0] = True
@@ -352,8 +352,7 @@ class NCell:
                 if t_arr[i] - prev_t >= gap:
                     prev_t = t_arr[i]
                     filter[i] = True
-        to_save = {'alts' : alts_arr[filter], 'dh' : dh_arr[filter], 't' : t_arr[filter], 
-                   'logL' : self.logL_edges, 'chi' : self.chi_edges}
+        to_save = {'alts' : alts_arr, 'dh' : dh_arr, 't' : t_arr[filter], 'logL' : self.logL_edges, 'chi' : self.chi_edges}
         if compress : np.savez_compressed(true_path + "data.npz", **to_save)
         else : np.savez(true_path + "data.npz", **to_save)
 
@@ -407,7 +406,7 @@ class NCell:
         for row in csv_reader: # there's only one row, this extracts it
             atmos.num_L = int(row[0])
             atmos.num_chi = int(row[1])
-            num_cells = int(row[3])
+            num_cells = int(row[2])
         csv_file.close()
 
         # load in simple numpy arrays
