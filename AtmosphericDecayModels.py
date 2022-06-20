@@ -7,7 +7,7 @@ Me = 5.97219e24 # mass of Earth (kg)
 Re = 6371 # radius of Earth (km)
 
 # read density model
-atmfile=open("cira-2012.dat","r")
+atmfile=open("atmosphere_data/cira-2012.dat","r")
 header=atmfile.readline()
 zmodel=[]
 denmodelL=[]
@@ -33,7 +33,7 @@ logdenHL = np.log10(denmodelHL)
 logz = np.log10(zmodel)
 
 # read solar cycle template (using F10.7 as the solar activity index)
-f107file = open("solar_cycle_table36_cira2012.dat","r")
+f107file = open("atmosphere_data/solar_cycle_table36_cira2012.dat","r")
 header=f107file.readline()
 f107_mo=[]
 for line in f107file:
@@ -117,7 +117,7 @@ def dadt(alt, t, m0, a_over_m, CD, setF107=None):
     '''
     return -(CD*density(alt, t, m0, setF107=setF107)*a_over_m*np.sqrt(G*Me*(alt + Re)*1e3))*60*60*24*365.25*1e-3
 
-def drag_lifetime(alt_i, alt_f, diameter, rho_m, a_over_m=None, CD=2.2, dt=1/365.25, m0=0, mindt=0, maxdt=None, dtfactor=1/100, tmax=np.inf, F107=None):
+def drag_lifetime(alt_i, alt_f, diameter, rho_m, a_over_m=None, CD=2.2, dt=1/365.25, m0=0, mindt=0, maxdt=None, dtfactor=1/100, tmax=np.inf, setF107=None):
     '''
     Estimates the drag lifetime of an object at altitude alt_i to degrade to altitude alt_f
 
@@ -153,9 +153,9 @@ def drag_lifetime(alt_i, alt_f, diameter, rho_m, a_over_m=None, CD=2.2, dt=1/365
 
     # integrate using predictor-corrector method
     while alt > alt_f:
-        dadt0 = dadt(alt, time, m0, a_over_m, CD, F107=F107)
+        dadt0 = dadt(alt, time, m0, a_over_m, CD, setF107=setF107)
         alt1 = alt + dadt0*dt
-        dadt1 = dadt(alt1, time, m0, a_over_m, CD, F107=F107)
+        dadt1 = dadt(alt1, time, m0, a_over_m, CD, setF107=setF107)
         ave_dadt = (dadt0 + dadt1)/2
         alt += ave_dadt*dt
         time += dt
