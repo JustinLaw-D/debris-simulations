@@ -16,11 +16,11 @@ Me = 5.97219e24 # mass of Earth (kg)
 
 class NCell:
 
-    def __init__(self, S, S_d, D, N_l, target_alts, alts, dh, lam, drag_lifetime, events=[], R_i=None, lam_rb=None, 
-                up_time=None, del_t=None, expl_rate_L=None, expl_rate_D=None, C_sat=None, sigma_sat=None, expl_rate_R=None, 
-                C_rb=None, sigma_rb=None, v=None, delta=None, alphaS=None, alphaD=None, alphaN=None, alphaR=None, P=None, 
-                m_s=None, m_rb=None, AM_sat=None, AM_rb=None, tau_do=None, tau_min=None, L_min=1e-3, L_max=1, num_L=10, 
-                chi_min=-2, chi_max=2, num_chi=10, num_dir=100):
+    def __init__(self, S, S_d, D, N_l, target_alts, alts, dh, lam, drag_lifetime, update_lifetime, events=[], R_i=None, 
+                lam_rb=None, up_time=None, del_t=None, expl_rate_L=None, expl_rate_D=None, C_sat=None, sigma_sat=None, 
+                expl_rate_R=None, C_rb=None, sigma_rb=None, v=None, delta=None, alphaS=None, alphaD=None, alphaN=None, 
+                alphaR=None, P=None, m_s=None, m_rb=None, AM_sat=None, AM_rb=None, tau_do=None, L_min=1e-3, L_max=1, 
+                num_L=10, chi_min=-2, chi_max=2, num_chi=10, num_dir=100):
         '''
         Constructor for NCell class
     
@@ -33,7 +33,8 @@ class NCell:
         alts : altitude of the shell's centre (array, km)
         dh : width of the shells (array, km)
         lam : launch rate of satellites of each type (array, 1/yr)
-        drag_lifetime : function that computes atmospheric drag lifetime ((km, km, m^2/kg) -> yr)
+        drag_lifetime : function that computes atmospheric drag lifetime ((km, km, m^2/kg, yr) -> yr)
+        update_lifetime : function that determines when the drag lifetime needs to be updated ((yr, yr) -> bool)
 
         Keyword Parameter(s):
         events : the discrete events occuring in the system (list of Event objects, default no events)
@@ -67,7 +68,6 @@ class NCell:
         AM_sat : area-to-mass ratio of the satallites of each type (list, m^2/kg, default 1/(20*2.2)m^2/kg)
         AM_rb : area-to-mass ratio of the rocket bodies of each type (list, m^2/kg, default 1/(20*2.2)m^2/kg)
         tau_do : average deorbiting time for satellites of each type in each shell (list of lists, yr, default decay_time/10)
-        tau_min : minimum decay lifetimes to consider for debris (list, yr, default 1/10yr)
         L_min : minimum characteristic length to consider (m, default 1mm)
         L_max : maximum characteristic length to consider (m, default 1m)
         num_L : number of debris bins in characteristic length (default 10)
@@ -112,13 +112,13 @@ class NCell:
             P = [None]*len(S)
         if tau_do is None:
             tau_do = [None]*len(S)
-        if tau_min is None:
-            tau_min = [1/10]*len(S)
 
         self.alts = alts
         self.dh = dh
         self.num_L = num_L
         self.num_chi = num_chi
+        self.drag_lifetime = drag_lifetime
+        self.update_lifetime = update_lifetime
         self.time = 0 # index of current time step
         self.t = [0] # list of times traversed
         self.cells = [] # start list of cells
@@ -207,7 +207,7 @@ class NCell:
                     AM_sat[j] = 1/(20*2.2)
 
                 # compute atmospheric drag lifetime for satallites in the shell
-                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_sat[j])
+                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_sat[j], 0)
                 if tau_do[i][j] is None:
                     tau_do[i][j] = tau/10
                 sat = Satellite(S[i][j], S_d[i][j], D[i][j], m_s[j], sigma_sat[j], lam[j], del_t[i][j],
@@ -234,12 +234,12 @@ class NCell:
                     AM_rb[i][j] = 1/(20*2.2)
 
                 # compute atmospheric drag lifetime for rocket bodies in the shell
-                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_rb[i][j])
+                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_rb[i][j], 0)
                 rb = RocketBody(R_i[i][j], m_rb[i][j], sigma_rb[i][j], lam_rb[i][j], AM_rb[i][j], tau, C_rb[j], expl_rate_R[j])
                 rb_list.append(rb)
 
-            # calculate decay paremeters for debris, initial debris values, and use those to make the N_factor_table
-            N_initial, tau_N, N_factor_table = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi))
+            # calculate decay paremeters for debris, initial debris values
+            N_initial, tau_N = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi))
             # generate initial distributions
             lethal_L = np.log10(randL(N_l[i], 1e-1, L_max, 'coll'))
             nlethal_L = np.log10(randL(delta[i]*N_l[i], L_min, 1e-1, 'coll'))
@@ -254,9 +254,7 @@ class NCell:
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi + bin_top_chi)/2
                     N_initial[j,k] = len(chi_dist[(bin_bot_chi < chi_dist) & (chi_dist < bin_top_chi)])
-                    tau_N[j,k] = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, 10**ave_chi)
-                    N_factor_table[j,k] = int(tau_N[j,k] > tau_min[i])
-                    N_initial[j,k] *= N_factor_table[j,k] # only count if you have to
+                    tau_N[j,k] = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, 10**ave_chi, 0)
 
             # figure out which events are in this cell
             events_loc = []
@@ -264,8 +262,7 @@ class NCell:
                 if (event.alt > alts[i] - dh[i]/2) and (event.alt <= alts[i] + dh[i]/2) : events_loc.append(event)
 
             # initialize cell
-            cell = Cell(sat_list, rb_list, N_initial, self.logL_edges, self.chi_edges, events_loc, alts[i],
-                        dh[i], tau_N, N_factor_table, v=v[i])
+            cell = Cell(sat_list, rb_list, N_initial, self.logL_edges, self.chi_edges, events_loc, alts[i], dh[i], tau_N, v=v[i])
             self.cells.append(cell)
             if i == len(S) - 1: self.upper_N = deepcopy(N_initial) # take the debris field above to be initial debris of top
 
@@ -329,7 +326,6 @@ class NCell:
                         elif v_min2 < 0 : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), v0, theta[l], phi[l], ave_chi, e_typ))
                         else : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), theta[l], phi[l], v0, ave_chi, e_typ) - vprime_cdf(np.sqrt(v_min2), v0, theta[l], phi[l], ave_chi, e_typ))
                     curr_prob[i,j,k] = sum/num_dir
-            curr_prob[i,:,:] *= self.cells[cell_index].N_factor_table # only count relevant debris
 
     def save(self, filepath, name, compress=True, gap=0, force=False):
         '''
@@ -924,6 +920,33 @@ class NCell:
         for expl in expl_list: # iterate through list
             C, typ, num = expl # unpack the list
             self.sim_expl(dN, num, C, i, typ)
+
+    def update_lifetimes(self, t):
+        '''
+        updates all drag lifetimes in the system, using drag_lifetime function
+
+        Input(s):
+        t : time to call drag_lifetime at (yr)
+
+        Keyword Input(s): None
+
+        Output(s): None
+        '''
+
+        for i in range(len(self.cells)): # iterate through cells
+            curr_cell = self.cells[i]
+            alt = curr_cell.alt
+            dh = curr_cell.dh
+            for j in range(curr_cell.num_sat_types): # handle satellites
+                AM = curr_cell.satellites[j].AM
+                curr_cell.satellites[j].tau = self.drag_lifetime(alt + dh/2, alt - dh/2, AM, t)
+            for j in range(curr_cell.num_rb_types): # handle rockets
+                AM = curr_cell.rockets[j].AM
+                curr_cell.rockets[j].tau = self.drag_lifetime(alt + dh/2, alt - dh/2, AM, t)
+            for j in range(self.num_chi): # handle debris
+                bin_bot_chi, bin_top_chi = self.chi_edges[j], self.chi_edges[j+1]
+                ave_chi = (bin_bot_chi + bin_top_chi)/2
+                curr_cell.tau_N[:,j] = self.drag_lifetime(alt + dh/2, alt - dh/2, 10**ave_chi, t)
 
     def get_t(self):
         '''

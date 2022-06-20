@@ -173,3 +173,21 @@ def drag_lifetime(alt_i, alt_f, diameter, rho_m, a_over_m=None, CD=2.2, dt=1/365
             if time > tmax : return np.inf
 
     return time
+
+def need_update(t_curr, t_last):
+  '''
+  outputs whether or not the atmospheric drag lifetime needs to be updated
+
+  Input(s):
+  t_curr : current time since "start" of simulation (yr)
+  t_last : time the lifetime was last updated (yr, since start of simulation)
+
+  Keyword Input(s): None
+
+  Output(s):
+  update : True is the value needs to be updated, False otherwise
+
+  Note(s): default function, call for an update once per month
+  '''
+
+  return t_curr - t_last > 1/12

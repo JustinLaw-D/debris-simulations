@@ -12,7 +12,7 @@ Re = 6371 # radius of Earth (km)
 
 class Cell:
     
-    def __init__(self, S_i, R_i, N_i, logL_edges, chi_edges, event_list, alt, dh, tau_N, N_factor_table, v=None):
+    def __init__(self, S_i, R_i, N_i, logL_edges, chi_edges, event_list, alt, dh, tau_N, v=None):
         '''Constructor for Cell class
     
         Parameter(s):
@@ -25,7 +25,6 @@ class Cell:
         alt : altitude of the shell centre (km)
         dh : width of the shell (km)
         tau_N : array of atmospheric drag lifetimes for debris (yr)
-        N_factor_table : same dimention as tau_N, 0s for ignored bins, 1 for non-ignored bins
 
         Keyword Parameter(s):
         v : relative collision speed (km/s, default 10km/s)
@@ -54,7 +53,6 @@ class Cell:
         self.alt = alt
         self.dh = dh
         self.tau_N = tau_N
-        self.N_factor_table = N_factor_table
         self.v = v
         self.v_orbit = np.sqrt(G*Me/((Re + alt)*1000))/1000 # orbital velocity in km/s
         self.logL_edges = logL_edges
@@ -99,8 +97,8 @@ class Cell:
 
         # write easy arrays
         Cl_array, Cnl_array = np.array(self.C_l)[filter], np.array(self.C_nl)[filter]
-        to_save = {'C_l' : Cl_array, 'C_nl' : Cnl_array, 'N_factor' : self.N_factor_table, 'tau_N' : self.tau_N, 
-                   'ascending' : self.ascending, 'logL' : self.logL_edges, 'chi' : self.chi_edges}
+        to_save = {'C_l' : Cl_array, 'C_nl' : Cnl_array, 'tau_N' : self.tau_N, 'ascending' : self.ascending, 
+                   'logL' : self.logL_edges, 'chi' : self.chi_edges}
         if compress : np.savez_compressed(filepath + "data.npz", **to_save)
         else : np.savez(filepath + "data.npz", **to_save)
 
@@ -168,7 +166,6 @@ class Cell:
         array_dict = np.load(filepath + "data.npz")
         cell.C_l = array_dict['C_l'].tolist()
         cell.C_nl = array_dict['C_nl'].tolist()
-        cell.N_factor_table = array_dict['N_factor']
         cell.tau_N = array_dict['tau_N']
         cell.ascending = array_dict['ascending']
         cell.logL_edges = array_dict['logL']
@@ -301,8 +298,7 @@ class Cell:
             for j in range(self.num_L):
                 ave_L = 10**((self.logL_edges[j] + self.logL_edges[j+1])/2) # average L value for these bins
                 for k in range(self.num_chi):
-                    if self.N_factor_table[j,k] != 0: # only calculate for non-ignored bins
-                        dSdt[i][j,k], dS_ddt[i][j,k], dDdt[i][j,k] = self.N_sat_events(S, S_d, D, N[j,k], sigma, alphaN, ave_L)
+                    dSdt[i][j,k], dS_ddt[i][j,k], dDdt[i][j,k] = self.N_sat_events(S, S_d, D, N[j,k], sigma, alphaN, ave_L)
         
             # compute collisions involving only satellities
             tot_S_sat_coll = 0 # total collisions destroying live satellites of this type
@@ -368,8 +364,7 @@ class Cell:
             # handle rocket-debris collisions
             for j in range(self.num_L):
                 for k in range(self.num_chi):
-                    if self.N_factor_table[j,k] != 0: # only calculate for non-ignored bins
-                        dRdt[i][j,k] = self.N_rb_events(R, N[j,k], sigma)
+                    dRdt[i][j,k] = self.N_rb_events(R, N[j,k], sigma)
 
             # handle rocket-rocket collisions
             tot_R_coll = 0 # total collisions destroying rocket bodies of this type
@@ -390,8 +385,7 @@ class Cell:
         # calculate rates of decay for debris
         for i in range(self.num_L):
             for j in range(self.num_chi):
-                if self.N_factor_table[i,j] != 0: # only calculate for non-ignored bins
-                    decay_N[i][j] = N[i,j]/self.tau_N[i,j]
+                decay_N[i][j] = N[i,j]/self.tau_N[i,j]
 
         D_dt = dSSdt + dSS_ddt + dSDdt + dS_ddS_ddt + dS_dDdt + dDDdt
         RD_dt = dSRdt + dS_dRdt + dDRdt
