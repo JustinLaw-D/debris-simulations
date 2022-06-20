@@ -23,4 +23,4 @@ def drag_lifetime_loc(hmax, hmin, a_over_m):
 atmosphere = NCell(S_i, S_di, D_i, N_i, [600, 750, 900],  alts, dhs, lam, drag_lifetime_loc)
 
 atmosphere.run_sim_euler(T, dt=1/5000)
-atmosphere.save("./", "NCellLaunchData", force=True)
+atmosphere.save("./", "NCellLaunchData", gap=0.5, force=True)
