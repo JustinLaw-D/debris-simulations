@@ -756,6 +756,8 @@ class NCell:
             self.t.append(self.t[self.time] + dt)
             self.time += 1
             dt = new_dt
+            # run events
+            self.sim_events()
             # update which are the old and new rates of change
             dSdt_n, dSddt_n, dDdt_n, dRdt_n, dNdt_n, dCldt_n, dCnldt_n = dSdt_n1, dSddt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1
             dSdt_n1, dSddt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
