@@ -20,8 +20,7 @@ def drag_lifetime_loc(hmax, hmin, a_over_m, t):
     m0 = int(t*12) % 144
     return drag_lifetime(hmax, hmin, 0, 0, a_over_m=a_over_m, dt=100/(60*60*24*365.25), maxdt=0.1, m0=m0)
 atmosphere = NCell([S_i], [S_di], [D_i], [N_i], [alt], [alt], [dh], [lam], drag_lifetime_loc, need_update, tau_do=[[2]])
-
-atmosphere.run_sim_euler(T, dt=0.0001)
+atmosphere.run_sim_precor(T, dt=1, mindtfactor=1000)
 t = atmosphere.get_t()
 S = atmosphere.get_S()[0][0]
 S_d = atmosphere.get_SD()[0][0]
