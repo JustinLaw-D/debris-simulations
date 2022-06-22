@@ -4,7 +4,7 @@ sys.path.append('./../')
 from NCell import NCell
 import numpy as np
  
-atmosphere = NCell.load("./test_save/")
+atmosphere = NCell.load("./test_save_NDebrisFlow/")
 t = atmosphere.get_t()
 T = t[-1]
 N = atmosphere.get_N()

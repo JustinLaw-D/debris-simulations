@@ -227,16 +227,16 @@ class NCell:
                     expl_rate_R[j] = 0
                 if C_rb[j] is None:
                     C_rb[j] = 1
-                if sigma_rb[i][j] is None:
-                    sigma_rb[i][j] = 10
-                if m_rb[i][j] is None:
-                    m_rb[i][j] = 250
-                if AM_rb[i][j] is None:
-                    AM_rb[i][j] = 1/(20*2.2)
+                if sigma_rb[j] is None:
+                    sigma_rb[j] = 10
+                if m_rb[j] is None:
+                    m_rb[j] = 250
+                if AM_rb[j] is None:
+                    AM_rb[j] = 1/(20*2.2)
 
                 # compute atmospheric drag lifetime for rocket bodies in the shell
-                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_rb[i][j], 0)
-                rb = RocketBody(R_i[i][j], m_rb[i][j], sigma_rb[i][j], lam_rb[i][j], AM_rb[i][j], tau, C_rb[j], expl_rate_R[j])
+                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_rb[j], 0)
+                rb = RocketBody(R_i[i][j], m_rb[j], sigma_rb[j], lam_rb[i][j], AM_rb[j], tau, C_rb[j], expl_rate_R[j])
                 rb_list.append(rb)
 
             # calculate decay paremeters for debris, initial debris values
@@ -562,7 +562,7 @@ class NCell:
                 self.sim_expl(dNdt, NR_expl[i,j], C, i, 'rb')
                     
             # add on debris lost to collisions
-            dNdt[i] -= sum(NS_coll[i,:,:,:] + NR_coll[i,:,:,:])
+            dNdt[i] -= np.sum(NS_coll[i,:,:,:]) + np.sum(NR_coll[i,:,:,:])
 
         # go through cells from bottom to top to correct values
         for i in range(self.num_cells):
@@ -684,7 +684,7 @@ class NCell:
                     curr_cell.satellites[j].S_d[self.time+1] = curr_cell.satellites[j].S_d[self.time] + 0.5*dt*((2+dt/dt_old)*dSddt_n1[i][j]-(dt/dt_old)*dSddt_n[i][j])
                     curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + 0.5*dt*((2+dt/dt_old)*dDdt_n1[i][j]-(dt/dt_old)*dDdt_n[i][j])
                 for j in range(curr_cell.num_rb_types):
-                        curr_cell.rockets[j].num[self.time+1] = curr_cell.rockets[j].num[self.time] + 0.5*dt((2+dt/dt_old)*dRdt_n1[i][j]-(dt/dt_old)*dRdt_n[i][j])
+                        curr_cell.rockets[j].num[self.time+1] = curr_cell.rockets[j].num[self.time] + 0.5*dt*((2+dt/dt_old)*dRdt_n1[i][j]-(dt/dt_old)*dRdt_n[i][j])
                 curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*dt*((2+dt/dt_old)*dNdt_n1[i]-(dt/dt_old)*dNdt_n[i])
                 curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + 0.5*dt*((2+dt/dt_old)*dCldt_n1[i]-(dt/dt_old)*dCldt_n[i])
                 curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + 0.5*dt*((2+dt/dt_old)*dCnldt_n1[i]-(dt/dt_old)*dCnldt_n[i])

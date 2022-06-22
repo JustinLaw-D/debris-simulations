@@ -73,7 +73,7 @@ class Cell:
         self.ascending = np.full(self.num_sat_types, False) # list of which satellite types are ascending
         for i in range(self.num_sat_types):
             sat = self.satellites[i]
-            if sat.target_alt < self.alt - self.dh/2 : self.ascending[i] = True
+            if sat.target_alt > self.alt + self.dh/2 : self.ascending[i] = True
 
     def save(self, filepath, filter, compress=True):
         '''
@@ -326,8 +326,8 @@ class Cell:
                 sigma2 = self.rockets[j].sigma
                 dSRdt[i,j], dS_dRdt[i,j], dDRdt[i,j] = self.SRColl_events(S, S_d, D, sigma, alphaR, R, sigma2)
                 tot_S_sat_coll += dSRdt[i,j]
-                tot_Sd_sat_coll += dS_dDdt[i,j]
-                tot_D_sat_coll += dRdt[i,j]
+                tot_Sd_sat_coll += dS_dRdt[i,j]
+                tot_D_sat_coll += dDRdt[i,j]
 
             # compute explosions for satellites
             expl_S[i] = expl_rate_L*S/100
@@ -355,10 +355,11 @@ class Cell:
             R = self.rockets[i].num[time]
             sigma = self.rockets[i].sigma
             lam = self.rockets[i].lam
+            tau = self.rockets[i].tau
             expl_rate = self.rockets[i].expl_rate
 
             # handle rocket-debris collisions
-            dRdt[i,:,:] = self.num_rb_types(R, N, sigma)
+            dRdt[i,:,:] = self.N_rb_events(R, N, sigma)
 
             # handle rocket-rocket collisions
             tot_R_coll = 0 # total collisions destroying rocket bodies of this type
@@ -372,8 +373,11 @@ class Cell:
             # handle rocket explosions
             expl_R[i] = expl_rate*R/100
 
+            # handle rocket decays
+            decay_R[i] = R/tau
+
             # sum everything up
-            dRdt_tot[i] = lam - np.sum(dRdt[i,:,:][self.lethal_rb_N[i] == True]) - tot_R_coll - expl_R[i]
+            dRdt_tot[i] = lam - np.sum(dRdt[i,:,:][self.lethal_rb_N[i] == True]) - tot_R_coll - decay_R[i] - expl_R[i]
             CR_dt[i] = dRdt[i,:,:]
 
         # calculate rates of decay for debris

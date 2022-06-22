@@ -7,17 +7,19 @@ R = 6371 # radius of earth in km
 alt1, alt2 = 600, 625 # altitude of Starlink satellites (km)
 dh = 25 # height of bands (km)
 V1, V2 = 4*np.pi*dh*(R+alt1)**2, 4*np.pi*dh*(R+alt2)**2 # volume of bands
-S_i = [0]
-S_di = [0]
-D_i = [0]
-N_i1, N_i2 = int(2.5e-5*V1), int(2.5e-5*V2)
+S_i = [[0],[0]]
+S_di = [[0],[0]]
+D_i = [[0],[0]]
+N_i1, N_i2 = int(0), int(2.5e-5*V2)
 lam = 0
 T = 50
-def drag_lifetime(_a, _b, _c):
+def drag_lifetime(_a, _b, _c, _d):
     return 5
-atmosphere = NCell([S_i, S_i], [S_di, S_di], [D_i, D_i], [N_i1, N_i2], [alt2], [alt1, alt2], [dh, dh], [lam], drag_lifetime)
+def update_lifetime(_a, _b):
+    return False
+atmosphere = NCell(S_i, S_di, D_i, [N_i1, N_i2], [alt2], [alt1, alt2], [dh, dh], [lam], drag_lifetime, update_lifetime)
 
-atmosphere.run_sim_euler(T, dt=0.01, upper=False)
+atmosphere.run_sim_precor(T, upper=False)
 t = atmosphere.get_t()
 N1, N2 = atmosphere.get_N()
 

@@ -170,7 +170,9 @@ class RocketBody:
         # save parameters
         csv_file = open(filepath + 'params.csv', 'w', newline='')
         csv_writer = csv.writer(csv_file, dialect='unix')
+        print('Here')
         csv_writer.writerow([self.m, self.sigma, self.lam, self.AM, self.tau, self.C, self.expl_rate])
+        print("wrote row")
         csv_file.close()
 
         # save data
@@ -195,9 +197,9 @@ class RocketBody:
         rb = RocketBody.__new__(RocketBody) # creates empty instance
 
         # load parameters
-        csv_file = open(filepath + 'params.csv', 'w', newline='')
+        csv_file = open(filepath + 'params.csv', 'r', newline='')
         csv_reader = csv.reader(csv_file, dialect='unix')
-        for row in csv_reader: # only one row, but this extracts is
+        for row in csv_reader: # only one row, but this extracts it
             rb.m, rb.sigma, rb.lam, rb.AM = float(row[0]), float(row[1]), float(row[2]), float(row[3])
             rb.tau, rb.C, rb.expl_rate = float(row[4]), float(row[5]), float(row[6])
         csv_file.close()
