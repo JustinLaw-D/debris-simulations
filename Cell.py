@@ -294,7 +294,7 @@ class Cell:
             expl_rate_D = self.satellites[i].expl_rate_D
 
             # handle debris events with satellites
-            dSdt[i,:], dS_ddt[i,:], dDdt[i,:] = self.N_sat_events(S, S_d, D, N, sigma, alphaN)
+            dSdt[i,:,:], dS_ddt[i,:,:], dDdt[i,:,:] = self.N_sat_events(S, S_d, D, N, sigma, alphaN)
         
             # compute collisions involving only satellities
             tot_S_sat_coll = 0 # total collisions destroying live satellites of this type
@@ -307,10 +307,6 @@ class Cell:
                 sigma2 = self.satellites[j].sigma
                 alphaS2 = self.satellites[j].alphaS
                 dSSdt[i,j], dSS_ddt[i,j], dS_ddS_ddt[i,j], dSDdt[i,j], dS_dDdt[i,j], dDDdt[i,j] = self.SColl_events(S, S_d, D, sigma, alphaS, alphaD, S2, S_d2, D2, sigma2, alphaS2)
-                if i > j: # avoid double counting
-                    dSSdt[i,j] = 0
-                    dS_ddS_ddt[i,j] = 0
-                    dDDdt[i,j] = 0
                 if i == j :
                     tot_S_sat_coll += 2*dSSdt[i,j] + dSS_ddt[i,j] + dSDdt[i,j]
                     tot_Sd_sat_coll += dSS_ddt[j,i] + 2*dS_ddS_ddt[i,j] + dS_dDdt[i,j]
@@ -319,6 +315,10 @@ class Cell:
                     tot_S_sat_coll += dSSdt[i,j] + dSS_ddt[i,j] + dSDdt[i,j]
                     tot_Sd_sat_coll += dSS_ddt[j,i] + dS_ddS_ddt[i,j] + dS_dDdt[i,j]
                     tot_D_sat_coll += dSDdt[j,i] + dS_dDdt[j,i] + dDDdt[i,j]
+                if i > j: # avoid double counting later on
+                    dSSdt[i,j] = 0
+                    dS_ddS_ddt[i,j] = 0
+                    dDDdt[i,j] = 0
 
             # compute collisions between satellites and rocket bodies
             for j in range(self.num_rb_types):
@@ -347,7 +347,7 @@ class Cell:
             dSdt_tot[i] = 0 - kill_S[i] - np.sum(dSdt[i,:,:]) - tot_S_sat_coll - expl_S[i] - ascend_S[i]
             dS_ddt_tot[i] = P*kill_S[i] - np.sum(dS_ddt[i,:,:]) - deorbit_S[i] - tot_Sd_sat_coll - expl_Sd[i]
             dDdt_tot[i] = (1-P)*kill_S[i] - np.sum(dDdt[i,:,:][self.lethal_sat_N[i] == True]) - decay_D[i] - tot_D_sat_coll + np.sum(dSdt[i,:,:][self.lethal_sat_N[i] == False]) + np.sum(dS_ddt[i,:,:][self.lethal_sat_N[i] == False]) - expl_D[i]
-            CS_dt[i] = dSdt[i,:,:] + dS_ddt[i,:,:] + dDdt[i,:,:]
+            CS_dt[i,:,:] = dSdt[i,:,:] + dS_ddt[i,:,:] + dDdt[i,:,:]
 
         for i in range(self.num_rb_types): # handle rocket body only events
 
@@ -363,12 +363,16 @@ class Cell:
 
             # handle rocket-rocket collisions
             tot_R_coll = 0 # total collisions destroying rocket bodies of this type
-            for j in range(i, self.num_rb_types): # to avoid double counting, start at i
+            for j in range(self.num_rb_types):
                 R2 = self.rockets[j].num[time]
                 sigma2 = self.rockets[j].sigma
                 dRRdt[i,j] = self.RColl_events(R, sigma, R2, sigma2)
                 if i != j : tot_R_coll += dRRdt[i,j]
                 else : tot_R_coll += 2*dRRdt[i,j]
+                if i > j : dRRdt[i,j] = 0 # avoid double counting later on
+
+            # add on satellite-rocket collisions
+            tot_R_coll += np.sum(dSRdt[:,i]) + np.sum(dS_dRdt[:,i]) + np.sum(dDRdt[:,i])
 
             # handle rocket explosions
             expl_R[i] = expl_rate*R/100
@@ -378,7 +382,7 @@ class Cell:
 
             # sum everything up
             dRdt_tot[i] = lam - np.sum(dRdt[i,:,:][self.lethal_rb_N[i] == True]) - tot_R_coll - decay_R[i] - expl_R[i]
-            CR_dt[i] = dRdt[i,:,:]
+            CR_dt[i,:,:] = dRdt[i,:,:]
 
         # calculate rates of decay for debris
         decay_N = N/self.tau_N

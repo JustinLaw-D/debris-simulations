@@ -777,7 +777,7 @@ class NCell:
         elif typ == 'rb':
             prob_table = self.rb_coll_probability_tables[index]
         for i in range(self.num_cells): # iterate through cells to send debris to
-            dNdt[i] += N_debris*prob_table[i, :, :]
+            dNdt[i,:,:] += N_debris*prob_table[i, :, :]
 
     def sim_colls_satrb(self, dNdt, rate, m, index, typ):
         '''
@@ -804,7 +804,7 @@ class NCell:
         elif typ == 'rb':
             prob_table = self.rb_coll_probability_tables[index]
         for i in range(self.num_cells): # iterate through cells to send debris to
-            dNdt[i] += N_debris*prob_table[i, :, :]
+            dNdt[i,:,:] += N_debris*prob_table[i, :, :]
 
     def sim_expl(self, dNdt, rate, C, index, typ):
         '''
@@ -831,7 +831,7 @@ class NCell:
         elif typ == 'rb':
             prob_table = self.rb_expl_probability_tables[index]
         for i in range(self.num_cells): # iterate through cells to send debris to
-            dNdt[i] += N_debris*prob_table[i, :, :]
+            dNdt[i,:,:] += N_debris*prob_table[i, :, :]
 
     def sim_events(self):
         '''
