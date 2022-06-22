@@ -170,9 +170,7 @@ class RocketBody:
         # save parameters
         csv_file = open(filepath + 'params.csv', 'w', newline='')
         csv_writer = csv.writer(csv_file, dialect='unix')
-        print('Here')
         csv_writer.writerow([self.m, self.sigma, self.lam, self.AM, self.tau, self.C, self.expl_rate])
-        print("wrote row")
         csv_file.close()
 
         # save data
