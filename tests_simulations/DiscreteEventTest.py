@@ -25,7 +25,7 @@ D_i = [0]
 N_i = int(2.5e-8*V)
 lam = 2000
 T = 50
-events = [MyEvent(alt, time=[1,10]), ExplEvent(600, [(1,'rb',1)],freq=0.5)]
+events = [MyEvent(alt, time=[1,10]), ExplEvent(600, [(1,'rb',1)],freq=10)]
 def drag_lifetime_loc(hmax, hmin, a_over_m, t):
     m0 = int(t*12) % 144
     return drag_lifetime(hmax, hmin, 0, 0, a_over_m=a_over_m, dt=100/(60*60*24*365.25), maxdt=0.1, m0=m0)
