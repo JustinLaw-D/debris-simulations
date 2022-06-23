@@ -853,12 +853,11 @@ class NCell:
 
             curr_cell = self.cells[i]
             dS, dS_d, dD = np.zeros(curr_cell.num_sat_types), np.zeros(curr_cell.num_sat_types), np.zeros(curr_cell.num_sat_types)
-            dR = np.zeros(curr_cell.num_sat_types)
+            dR = np.zeros(curr_cell.num_rb_types)
             dN_loc = np.zeros((self.num_L, self.num_chi)) # debris change from non-collision sources
             coll_list = []
             expl_list = []
-            print(self.get_S()[i])
-            S, S_d, D, R = np.array(self.get_S()[i]), np.array(self.get_SD()[i]), np.array(self.get_D()[i]), np.array(self.get_R()[i])
+            S, S_d, D, R = self.get_curr_S(self.time)[i], self.get_curr_SD(self.time)[i], self.get_curr_D(self.time)[i], self.get_curr_R(self.time)[i]
             N = curr_cell.N_bins[self.time]
 
             for event in curr_cell.event_list: # iterate through possible events
@@ -982,14 +981,14 @@ class NCell:
     
     def get_S(self):
         '''
-        returns list of lists for number of live satellites in each shell
+        returns list of lists of lists for number of live satellites in each shell
 
         Parameter(s): None
 
         Keyword Parameter(s): None
 
         Returns:
-        list of array of S values for each cell, in order of ascending altitude
+        list of array of S values for each cell of each type, in order of ascending altitude
         '''
 
         to_return = []
@@ -1001,7 +1000,7 @@ class NCell:
 
     def get_curr_S(self, time):
         '''
-        returns list of lists for the number of live satellites of each type in each shell
+        returns array for the number of live satellites of each type in the each shell
         at the given time
 
         Paramter(s):
@@ -1010,19 +1009,27 @@ class NCell:
         Keyword Parameter(s): None
 
         Returns:
-        ...
+        S : (list of) array of S values at the current time
         '''
+
+        to_return = []
+        for i in range(self.num_cells):
+            curr_cell = self.cells[i]
+            to_return.append(np.zeros(curr_cell.num_sat_types))
+            for j in range(curr_cell.num_sat_types):
+                to_return[i][j] = curr_cell.satellites[j].S[time]
+        return to_return
 
     def get_SD(self):
         '''
-        returns list of lists for number of de-orbiting satellites in each shell
+        returns list of lists of lists for number of de-orbiting satellites in each shell
 
         Parameter(s): None
 
         Keyword Parameter(s): None
 
         Returns:
-        list of array of D values for each cell, in order of ascending altitude
+        list of array of S_d values for each cell of each type, in order of ascending altitude
         '''
 
         to_return = []
@@ -1032,16 +1039,38 @@ class NCell:
                 to_return[-1].append(cell.satellites[j].S_d)
         return to_return
 
+    def get_curr_SD(self, time):
+        '''
+        returns array for the number of de-orbiting satellites of each type in the each shell
+        at the given time
+
+        Paramter(s):
+        time : time index to pull values from
+
+        Keyword Parameter(s): None
+
+        Returns:
+        S_d : (list of) array of S_d values at the current time
+        '''
+
+        to_return = []
+        for i in range(self.num_cells):
+            curr_cell = self.cells[i]
+            to_return.append(np.zeros(curr_cell.num_sat_types))
+            for j in range(curr_cell.num_sat_types):
+                to_return[i][j] = curr_cell.satellites[j].S_d[time]
+        return to_return
+
     def get_D(self):
         '''
-        returns list of lists for number of derelict satellites in each shell
+        returns list of lists of lists for number of derelict satellites in each shell
 
         Parameter(s): None
 
         Keyword Parameter(s): None
 
         Returns:
-        list of array of D values for each cell, in order of ascending altitude
+        list of array of D values for each cell of each type, in order of ascending altitude
         '''
 
         to_return = []
@@ -1051,16 +1080,38 @@ class NCell:
                 to_return[-1].append(cell.satellites[j].D)
         return to_return
 
+    def get_curr_D(self, time):
+        '''
+        returns array for the number of derelict satellites of each type in the each shell
+        at the given time
+
+        Paramter(s):
+        time : time index to pull values from
+
+        Keyword Parameter(s): None
+
+        Returns:
+        D : (list of) array of D values at the current time
+        '''
+
+        to_return = []
+        for i in range(self.num_cells):
+            curr_cell = self.cells[i]
+            to_return.append(np.zeros(curr_cell.num_sat_types))
+            for j in range(curr_cell.num_sat_types):
+                to_return[i][j] = curr_cell.satellites[j].D[time]
+        return to_return
+
     def get_R(self):
         '''
-        returns list of lists for number of rocket bodies in each shell
+        returns list of lists of lists for number of rocket bodies in each shell
 
         Parameter(s): None
 
         Keyword Parameter(s): None
 
         Returns:
-        list of array of R values for each cell, in order of ascending altitude
+        list of array of R values for each cell of each type, in order of ascending altitude
         '''
 
         to_return = []
@@ -1070,6 +1121,27 @@ class NCell:
                 to_return[-1].append(cell.rockets[j].num)
         return to_return
 
+    def get_curr_R(self, time):
+        '''
+        returns array for the number of rocket bodies of each type in the each shell
+        at the given time
+
+        Paramter(s):
+        time : time index to pull values from
+
+        Keyword Parameter(s): None
+
+        Returns:
+        R : (list of) array of R values at the current time
+        '''
+
+        to_return = []
+        for i in range(self.num_cells):
+            curr_cell = self.cells[i]
+            to_return.append(np.zeros(curr_cell.num_rb_types))
+            for j in range(curr_cell.num_rb_types):
+                to_return[i][j] = curr_cell.rockets[j].num[time]
+        return to_return
 
     def get_N(self):
         '''
