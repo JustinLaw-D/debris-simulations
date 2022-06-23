@@ -562,7 +562,10 @@ class NCell:
                 self.sim_expl(dNdt, NR_expl[i,j], C, i, 'rb')
                     
             # add on debris lost to collisions
-            dNdt[i] -= np.sum(NS_coll[i,:,:,:]) + np.sum(NR_coll[i,:,:,:])
+            if num_sat_types != 0:
+                dNdt[i] -= np.sum(NS_coll[i,:,:,:], axis=0)
+            if num_rb_types != 0:
+                dNdt[i] -= np.sum(NR_coll[i,:,:,:], axis=0)
 
         # go through cells from bottom to top to correct values
         for i in range(self.num_cells):
@@ -854,13 +857,14 @@ class NCell:
             dN_loc = np.zeros((self.num_L, self.num_chi)) # debris change from non-collision sources
             coll_list = []
             expl_list = []
-            S, S_d, D, R = self.get_S()[i], self.get_SD()[i], self.get_D()[i], self.get_R()[i]
+            print(self.get_S()[i])
+            S, S_d, D, R = np.array(self.get_S()[i]), np.array(self.get_SD()[i]), np.array(self.get_D()[i]), np.array(self.get_R()[i])
             N = curr_cell.N_bins[self.time]
 
             for event in curr_cell.event_list: # iterate through possible events
 
                 if event.time is not None: # events at specific times
-                    while event.time[0] <= self.t[self.time]:
+                    while event.time != [] and event.time[0] <= self.t[self.time]:
                         dS_temp, dS_d_temp, dD_temp, dR_temp, dN_loc_temp, coll_temp, expl_temp = event.run_event(S, S_d, D, R, N, self.logL_edges, self.chi_edges)
                         event.time.pop(0)
                         dS += dS_temp
@@ -994,6 +998,20 @@ class NCell:
             for j in range(cell.num_sat_types):
                 to_return[-1].append(cell.satellites[j].S)
         return to_return
+
+    def get_curr_S(self, time):
+        '''
+        returns list of lists for the number of live satellites of each type in each shell
+        at the given time
+
+        Paramter(s):
+        time : time index to pull values from
+
+        Keyword Parameter(s): None
+
+        Returns:
+        ...
+        '''
 
     def get_SD(self):
         '''

@@ -266,7 +266,7 @@ class Event:
                  zero
         '''
 
-        return 0, 0, 0, 0, 0, 0, 0
+        return np.zeros(S.shape), np.zeros(S_d.shape), np.zeros(D.shape), np.zeros(R.shape), np.zeros(N.shape), [], []
 
 # class for handling basic explosions
 class ExplEvent(Event):
@@ -324,7 +324,7 @@ class ExplEvent(Event):
                  zero
         '''
 
-        return 0, 0, 0, 0, 0, 0, self.expl_list
+        return np.zeros(S.shape), np.zeros(S_d.shape), np.zeros(D.shape), np.zeros(R.shape), np.zeros(N.shape), [], self.expl_list
 
 # class for handling basic collisions
 class CollEvent(Event):
@@ -383,4 +383,4 @@ class CollEvent(Event):
                  zero
         '''
 
-        return 0, 0, 0, 0, 0, self.coll_list, 0
+        return np.zeros(S.shape), np.zeros(S_d.shape), np.zeros(D.shape), np.zeros(R.shape), np.zeros(N.shape), self.coll_list, []
