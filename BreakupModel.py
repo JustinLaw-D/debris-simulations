@@ -357,7 +357,7 @@ def randX(num, x_min, x_max, L, typ):
     elif L <= 8/100 : return _randX_8(num, x_min, x_max, L)
     else:
         if typ == 'sat' : comp = 10*(np.log10(L) + 1.05)
-        else : 10*(np.log10(L) + 1.76)
+        else : comp = 10*(np.log10(L) + 1.76)
         if np.random.uniform() > comp : return _randX_11(num, x_min, x_max, L, typ)
         else : return _randX_8(num, x_min, x_max, L)
 

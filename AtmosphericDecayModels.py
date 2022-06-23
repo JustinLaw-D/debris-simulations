@@ -63,7 +63,7 @@ def density(alt,t,mo0,setF107=None):
     rho : atmospheric density at the given altitude and time (kg/m^3)
     '''
 
-    i=int(alt/20)-1 # calculate index for altitude
+    i=int((alt-100)/20) # calculate index for altitude
     if i > len(zmodel)-2: i=len(zmodel)-2
     if i < 0: i=0
 
