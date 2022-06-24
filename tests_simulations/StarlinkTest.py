@@ -7,7 +7,7 @@ from NCell import NCell
 from AtmosphericDecayModels import drag_lifetime, need_update
 import numpy as np
 R = 6371 # radius of earth in km
-alt = 600 # altitude of Starlink satellites (km)
+alt = 900 # altitude of Starlink satellites (km)
 dh = 25 # height of band (km)
 V = 4*np.pi*dh*(R+alt)**2 # volume of band
 S_i = [0]
