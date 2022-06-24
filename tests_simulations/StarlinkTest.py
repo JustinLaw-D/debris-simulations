@@ -14,11 +14,13 @@ S_i = [0]
 S_di = [0]
 D_i = [0]
 N_i = int(2.5e-8*V)
-lam = 2000
+lam = 1000
 T = 50
 def drag_lifetime_loc(hmax, hmin, a_over_m, t):
     m0 = int(t*12) % 144
     return drag_lifetime(hmax, hmin, 0, 0, a_over_m=a_over_m, dt=100/(60*60*24*365.25), maxdt=0.1, m0=m0)
+def update_needed(_a, _b):
+    return False
 atmosphere = NCell([S_i], [S_di], [D_i], [N_i], [alt], [alt], [dh], [lam], drag_lifetime_loc, need_update, tau_do=[[2]])
 atmosphere.run_sim_precor(T, dt=1, mindtfactor=1000, tolerance=2)
 t = atmosphere.get_t()
