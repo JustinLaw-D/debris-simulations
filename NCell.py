@@ -20,7 +20,7 @@ class NCell:
                 lam_rb=None, up_time=None, del_t=None, expl_rate_L=None, expl_rate_D=None, C_sat=None, sigma_sat=None, 
                 expl_rate_R=None, C_rb=None, sigma_rb=None, v=None, delta=None, alphaS=None, alphaD=None, alphaN=None, 
                 alphaR=None, P=None, m_s=None, m_rb=None, AM_sat=None, AM_rb=None, tau_do=None, L_min=1e-3, L_max=1, 
-                num_L=10, chi_min=-2, chi_max=2, num_chi=10, num_dir=100):
+                num_L=10, chi_min=-2, chi_max=1.5, num_chi=10, num_dir=100):
         '''
         Constructor for NCell class
     
