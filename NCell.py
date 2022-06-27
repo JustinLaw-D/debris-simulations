@@ -16,7 +16,7 @@ Me = 5.97219e24 # mass of Earth (kg)
 
 class NCell:
 
-    def __init__(self, S, S_d, D, N_l, target_alts, alts, dh, lam, drag_lifetime, update_lifetime, events=[], R_i=None, 
+    def __init__(self, S, S_d, D, N_l, target_alts, alt_edges, lam, drag_lifetime, update_lifetime, events=[], R_i=None, 
                 lam_rb=None, up_time=None, del_t=None, expl_rate_L=None, expl_rate_D=None, C_sat=None, sigma_sat=None, 
                 expl_rate_R=None, C_rb=None, sigma_rb=None, v=None, delta=None, alphaS=None, alphaD=None, alphaN=None, 
                 alphaR=None, P=None, m_s=None, m_rb=None, AM_sat=None, AM_rb=None, tau_do=None, L_min=1e-3, L_max=1, 
@@ -30,8 +30,7 @@ class NCell:
         D : list of initial number of derelict satellites in each shell of each type (list of arrays)
         N_l : initial number of catestrophically lethal debris in each shell (array)
         target_alts : list of target altitude of each satellite type (array, km)
-        alts : altitude of the shell's centre (array, km)
-        dh : width of the shells (array, km)
+        alt_edges : edges of the altitude bands to be used (array, km)
         lam : launch rate of satellites of each type (array, 1/yr)
         drag_lifetime : function that computes atmospheric drag lifetime ((km, km, m^2/kg, yr) -> yr)
         update_lifetime : function that determines when the drag lifetime needs to be updated ((yr, yr) -> bool)
@@ -113,8 +112,11 @@ class NCell:
         if tau_do is None:
             tau_do = [None]*len(S)
 
-        self.alts = alts
-        self.dh = dh
+        self.alts = np.zeros(len(alt_edges)-1)
+        self.dh = np.zeros(self.alts.shape)
+        for i in range(alt_edges-1):
+            self.dh[i] = alt_edges[i+1]-alt_edges[i]
+            self.alts[i] = (alt_edges[i]+alt_edges[i+1])/2
         self.num_L = num_L
         self.num_chi = num_chi
         self.drag_lifetime = drag_lifetime
@@ -208,7 +210,7 @@ class NCell:
                     AM_sat[j] = 1/(20*2.2)
 
                 # compute atmospheric drag lifetime for satallites in the shell
-                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_sat[j], 0)
+                tau = drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, AM_sat[j], 0)
                 if tau_do[i][j] is None:
                     tau_do[i][j] = tau/10
                 sat = Satellite(S[i][j], S_d[i][j], D[i][j], m_s[j], sigma_sat[j], lam[j], del_t[i][j],
@@ -235,7 +237,7 @@ class NCell:
                     AM_rb[j] = 1/(20*2.2)
 
                 # compute atmospheric drag lifetime for rocket bodies in the shell
-                tau = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, AM_rb[j], 0)
+                tau = drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, AM_rb[j], 0)
                 rb = RocketBody(R_i[i][j], m_rb[j], sigma_rb[j], lam_rb[i][j], AM_rb[j], tau, C_rb[j], expl_rate_R[j])
                 rb_list.append(rb)
 
@@ -255,15 +257,15 @@ class NCell:
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi + bin_top_chi)/2
                     N_initial[j,k] = len(chi_dist[(bin_bot_chi < chi_dist) & (chi_dist < bin_top_chi)])
-                    tau_N[j,k] = drag_lifetime(alts[i] + dh[i]/2, alts[i] - dh[i]/2, 10**ave_chi, 0)
+                    tau_N[j,k] = drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, 10**ave_chi, 0)
 
             # figure out which events are in this cell
             events_loc = []
             for event in events:
-                if (event.alt > alts[i] - dh[i]/2) and (event.alt <= alts[i] + dh[i]/2) : events_loc.append(event)
+                if (event.alt > self.alts[i] - self.dh[i]/2) and (event.alt <= self.alts[i] + self.dh[i]/2) : events_loc.append(event)
 
             # initialize cell
-            cell = Cell(sat_list, rb_list, N_initial, self.logL_edges, self.chi_edges, events_loc, alts[i], dh[i], tau_N, v=v[i])
+            cell = Cell(sat_list, rb_list, N_initial, self.logL_edges, self.chi_edges, events_loc, self.alts[i], self.dh[i], tau_N, v=v[i])
             self.cells.append(cell)
             if i == len(S) - 1: self.upper_N = deepcopy(N_initial) # take the debris field above to be initial debris of top
 
@@ -367,7 +369,7 @@ class NCell:
         csv_file.close()
 
         # write easy arrays
-        alts_arr, dh_arr, t_arr = np.array(self.alts), np.array(self.dh), np.array(self.t)
+        t_arr = np.array(self.t)
         filter = np.full(t_arr.shape, False) # build filter based on time steps
         if t_arr.size > 0:
             prev_t = t_arr[0]
@@ -376,7 +378,7 @@ class NCell:
                 if t_arr[i] - prev_t >= gap:
                     prev_t = t_arr[i]
                     filter[i] = True
-        to_save = {'alts' : alts_arr, 'dh' : dh_arr, 't' : t_arr[filter], 'logL' : self.logL_edges, 'chi' : self.chi_edges}
+        to_save = {'alts' : self.alts, 'dh' : self.dh, 't' : t_arr[filter], 'logL' : self.logL_edges, 'chi' : self.chi_edges}
         if compress : np.savez_compressed(true_path + "data.npz", **to_save)
         else : np.savez(true_path + "data.npz", **to_save)
 
@@ -435,8 +437,8 @@ class NCell:
 
         # load in simple numpy arrays
         array_dict = np.load(filepath + 'data.npz')
-        atmos.alts = array_dict['alts'].tolist()
-        atmos.dh = array_dict['dh'].tolist()
+        atmos.alts = array_dict['alts']
+        atmos.dh = array_dict['dh']
         atmos.t = array_dict['t'].tolist()
         atmos.time = len(atmos.t) - 1 # set time to the end of the data
         atmos.lupdate_time = atmos.time

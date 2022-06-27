@@ -1,4 +1,6 @@
-# Test of stable single-cell system, using drag lifetime from JASON model
+# test of starlink system, over a range of alpha and launch rate parameters
+# neglecting outside contributions to the system besides the current debris
+# environment
 
 import sys
 sys.path.append('./../')
@@ -8,8 +10,10 @@ from NCell import NCell
 from AtmosphericDecayModels import drag_lifetime, need_update
 from data_utilities import *
 import numpy as np
+import json
+from multiprocessing import Pool
 R = 6371 # radius of earth in km
-alt = 900 # altitude of Starlink satellites (km)
+alts = [] # altitude bands of Starlink satellites (km)
 dh = 25 # height of band (km)
 V = 4*np.pi*dh*(R+alt)**2 # volume of band
 S_i = [0]
