@@ -7,9 +7,8 @@ from NCell import NCell
 from AtmosphericDecayModels import drag_lifetime, need_update
 import numpy as np
 R = 6371 # radius of earth in km
-alt = 900 # altitude of Starlink satellites (km)
-dh = 25 # height of band (km)
-V = 4*np.pi*dh*(R+alt)**2 # volume of band
+alt = [575, 625] # altitude band of Starlink satellites (km)
+V = 4*np.pi*50*(R+600)**2 # volume of band
 S_i = [0]
 S_di = [0]
 D_i = [0]
@@ -19,9 +18,8 @@ T = 50
 def drag_lifetime_loc(hmax, hmin, a_over_m, t):
     m0 = int(t*12) % 144
     return drag_lifetime(hmax, hmin, 0, 0, a_over_m=a_over_m, dt=100/(60*60*24*365.25), maxdt=0.1, m0=m0)
-def update_needed(_a, _b):
-    return False
-atmosphere = NCell([S_i], [S_di], [D_i], [N_i], [alt], [alt], [dh], [lam], drag_lifetime_loc, need_update, tau_do=[[2]])
+atmosphere = NCell([S_i], [S_di], [D_i], [N_i], [600], alt, [lam], drag_lifetime_loc, need_update, tau_do=[[2]])
+print(atmosphere.alts, atmosphere.dh)
 atmosphere.run_sim_precor(T, dt=1, mindtfactor=1000, tolerance=2)
 t = atmosphere.get_t()
 S = atmosphere.get_S()[0][0]

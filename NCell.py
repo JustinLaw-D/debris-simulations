@@ -114,7 +114,7 @@ class NCell:
 
         self.alts = np.zeros(len(alt_edges)-1)
         self.dh = np.zeros(self.alts.shape)
-        for i in range(alt_edges-1):
+        for i in range(len(alt_edges)-1):
             self.dh[i] = alt_edges[i+1]-alt_edges[i]
             self.alts[i] = (alt_edges[i]+alt_edges[i+1])/2
         self.num_L = num_L
