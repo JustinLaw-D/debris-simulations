@@ -41,7 +41,7 @@ class MyError(Exception):
 uriBase                = "https://www.space-track.org"
 requestLogin           = "/ajaxauth/login"
 requestCmdAction       = "/basicspacedata/query" 
-requestStarlink   = "/class/satcat/OBJECT_TYPE/PAYLOAD/SATNAME/~~STARLINK/orderby/LAUNCH/format/json"
+requestDebris   = "/class/satcat/OBJECT_TYPE/PAYLOAD/orderby/NORAD_CAT_ID/format/json"
 
 # ACTION REQUIRED FOR YOU:
 #=========================
@@ -72,15 +72,16 @@ with requests.Session() as session:
         raise MyError(resp, "POST fail on login")
 
     # this query picks up all Starlink satellites from the catalog. Note - a 401 failure shows you have bad credentials 
-    resp = session.get(uriBase + requestCmdAction + requestStarlink)
+    resp = session.get(uriBase + requestCmdAction + requestDebris)
     if resp.status_code != 200:
         print(resp)
-        raise MyError(resp, "GET fail on request for Starlink satellites")
+        raise MyError(resp, "GET fail on request for Debris satellites")
     
     data = json.loads(resp.text)
-    i = 0
+    i = 0 # filter out starlink satellites and satellites that have decayed
     while i < len(data):
         if data[i]["DECAY"] != None : data.pop(i)
+        elif "STARLINK" in data[i]["SATNAME"] : data.pop(i)
         else : i += 1
     
     with open(configOut, 'w') as file:
