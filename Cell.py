@@ -28,7 +28,6 @@ class Cell:
 
         Keyword Parameter(s):
         v : relative collision speed (km/s, default 10km/s)
-        tau_min : minimum drag lifetime of debris to consider (yr, default 1/10)
 
         Output(s):
         Cell instance

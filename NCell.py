@@ -59,7 +59,7 @@ class NCell:
                  avoid in each shell (list of lists, default alphaN)
         alphaN : fraction of collisions with trackable debris that a live satellites of each type fails to 
                  avoid in each shell (list of lists, default 0.2)
-        alphaS : fraction of collisions with a rocket body that a live satellites of each type fails to 
+        alphaR : fraction of collisions with a rocket body that a live satellites of each type fails to 
                  avoid in each shell (list of lists, default alphaN)
         P : post-mission disposal probability for satellites of each type in each shell (list of lists, default 0.95)
         m_s : mass of the satallites of each type (list, kg, default 250kg)
@@ -244,8 +244,8 @@ class NCell:
             # calculate decay paremeters for debris, initial debris values
             N_initial, tau_N = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi))
             # generate initial distributions
-            lethal_L = np.log10(randL(N_l[i], 1e-1, L_max, 'coll'))
-            nlethal_L = np.log10(randL(delta[i]*N_l[i], L_min, 1e-1, 'coll'))
+            lethal_L = np.log10(randL(N_l[i], 1e-1, L_max, 'expl')) # explosions are the main source https://www.esa.int/esapub/bulletin/bullet109/chapter16_bul109.pdf
+            nlethal_L = np.log10(randL(delta[i]*N_l[i], L_min, 1e-1, 'expl'))
             for j in range(num_L):
                 bin_L = 0
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
