@@ -99,6 +99,9 @@ def density(alt,t,mo0,setF107=None):
 
     else:
       rho = 10.**(  logdenHL[i]+(logdenHL[i+1]-logdenHL[i])/(logz[i+1]-logz[i])*(logalt-logz[i]) )
+
+    if t == 0:
+      print(rho)
     return rho
 
 def dadt(alt, t, m0, a_over_m, CD, setF107=None):
@@ -159,7 +162,7 @@ def drag_lifetime(alt_i, alt_f, diameter, rho_m, a_over_m=None, CD=2.2, dt=1/365
     while alt > alt_f:
         dadt0 = dadt(alt, time, m0, a_over_m, CD, setF107=setF107)
         alt1 = alt + dadt0*dt
-        dadt1 = dadt(alt1, time, m0, a_over_m, CD, setF107=setF107)
+        dadt1 = dadt(alt1, time + dt, m0, a_over_m, CD, setF107=setF107)
         ave_dadt = (dadt0 + dadt1)/2
         alt += ave_dadt*dt
         time += dt
