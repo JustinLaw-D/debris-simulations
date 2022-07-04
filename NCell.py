@@ -252,11 +252,10 @@ class NCell:
                 ave_L = 10**((bin_bot_L+bin_top_L)/2)
                 bin_L += len(lethal_L[(bin_bot_L < lethal_L) & (lethal_L < bin_top_L)])
                 bin_L += len(nlethal_L[(bin_bot_L < nlethal_L) & (nlethal_L < bin_top_L)])
-                chi_dist = randX(bin_L, chi_min, chi_max, ave_L, 'sat')
+                N_initial[j,0] = bin_L # put everything in the lowest A/M bin
                 for k in range(num_chi):
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi + bin_top_chi)/2
-                    N_initial[j,k] = len(chi_dist[(bin_bot_chi < chi_dist) & (chi_dist < bin_top_chi)])
                     tau_N[j,k] = drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, 10**ave_chi, 0)
 
             # figure out which events are in this cell
@@ -650,6 +649,7 @@ class NCell:
         Note(s): AB(2) method is used as predictor, Trapezoid method as corrector
         '''
         dt_min = dt/mindtfactor # get minimum possible time step
+        warning_given = False # whether or not a warning has been given yet
         # get additional initial value if needed
         if self.time == 0 : self.run_sim_euler(dt_min, dt=dt_min, upper=upper)
         # get previous rate of change values
@@ -737,7 +737,9 @@ class NCell:
             new_dt = min(np.abs(dt_old*(tolerance/epsilon)**(1/3)), maxdt)
             if redo:
                 if dt < dt_min:
-                    print('WARNING : System may be too stiff to integrate')
+                    if not warning_given:
+                        print('WARNING : System may be too stiff to integrate')
+                        warning_given = True
                     new_dt = dt_min
                 else:
                     dt = new_dt
