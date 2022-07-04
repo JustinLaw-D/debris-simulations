@@ -222,10 +222,12 @@ class Cell:
 
         Output(s):
         dSdt : array of rate of change of the number of live satellites in the cell of each type due to only processes
-               withing the cell (yr^(-1))
-        dS_ddt : array of rate of change of the number of de-orbiting satellites in the cell of each type (yr^(-1))
-        dDdt : array of rate of change of the number of derelict satellites in the cell of each type (yr^(-1))
-        dRdt : array of rate of change of number of rocket bodies in the cell of each type (yr^(-1))
+               withing the cell (excluding satellites ascending) (yr^(-1))
+        dS_ddt : array of rate of change of the number of de-orbiting satellites in the cell of each type
+                 (excluding satellites de-orbiting) (yr^(-1))
+        dDdt : array of rate of change of the number of derelict satellites in the cell of each type
+               (excluding derelicts decaying) (yr^(-1))
+        dRdt : array of rate of change of number of rocket bodies in the cell of each type (excluding rockets decaying) (yr^(-1))
         S_out : array of rate of satellites ascending from the cell of each type (yr^(-1))
         S_dout : array of rate of satellites de-orbiting from the cell of each type (yr^(-1))
         D_out : array of rate of satellites decaying from the cell of each type (yr^(-1))
@@ -343,9 +345,9 @@ class Cell:
 
             # sum everything up
             P = self.satellites[i].P
-            dSdt_tot[i] = 0 - kill_S[i] - np.sum(dSdt[i,:,:]) - tot_S_sat_coll - expl_S[i] - ascend_S[i]
-            dS_ddt_tot[i] = P*kill_S[i] - np.sum(dS_ddt[i,:,:]) - deorbit_S[i] - tot_Sd_sat_coll - expl_Sd[i]
-            dDdt_tot[i] = (1-P)*kill_S[i] - np.sum(dDdt[i,:,:][self.lethal_sat_N[i] == True]) - decay_D[i] - tot_D_sat_coll + np.sum(dSdt[i,:,:][self.lethal_sat_N[i] == False]) + np.sum(dS_ddt[i,:,:][self.lethal_sat_N[i] == False]) - expl_D[i]
+            dSdt_tot[i] = 0 - kill_S[i] - np.sum(dSdt[i,:,:]) - tot_S_sat_coll - expl_S[i]
+            dS_ddt_tot[i] = P*kill_S[i] - np.sum(dS_ddt[i,:,:]) - tot_Sd_sat_coll - expl_Sd[i]
+            dDdt_tot[i] = (1-P)*kill_S[i] - np.sum(dDdt[i,:,:][self.lethal_sat_N[i] == True])  - tot_D_sat_coll + np.sum(dSdt[i,:,:][self.lethal_sat_N[i] == False]) + np.sum(dS_ddt[i,:,:][self.lethal_sat_N[i] == False]) - expl_D[i]
             CS_dt[i,:,:] = dSdt[i,:,:] + dS_ddt[i,:,:] + dDdt[i,:,:]
 
         for i in range(self.num_rb_types): # handle rocket body only events
@@ -380,7 +382,7 @@ class Cell:
             decay_R[i] = R/tau
 
             # sum everything up
-            dRdt_tot[i] = lam - np.sum(dRdt[i,:,:][self.lethal_rb_N[i] == True]) - tot_R_coll - decay_R[i] - expl_R[i]
+            dRdt_tot[i] = lam - np.sum(dRdt[i,:,:][self.lethal_rb_N[i] == True]) - tot_R_coll - expl_R[i]
             CR_dt[i,:,:] = dRdt[i,:,:]
 
         # calculate rates of decay for debris

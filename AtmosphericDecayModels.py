@@ -100,8 +100,6 @@ def density(alt,t,mo0,setF107=None):
     else:
       rho = 10.**(  logdenHL[i]+(logdenHL[i+1]-logdenHL[i])/(logz[i+1]-logz[i])*(logalt-logz[i]) )
 
-    if t == 0:
-      print(rho)
     return rho
 
 def dadt(alt, t, m0, a_over_m, CD, setF107=None):
