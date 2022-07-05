@@ -734,12 +734,13 @@ class NCell:
             # update step size, and check if calculation needs to be redone
             if epsilon > tolerance:
                     redo = True
-            new_dt = min(np.abs(dt_old*(tolerance/epsilon)**(1/3)), maxdt)
+            new_dt = min(np.abs(dt*(tolerance/epsilon)**(1/3)), maxdt)
             if redo:
-                if dt < dt_min:
+                if dt <= dt_min:
                     if not warning_given:
                         print('WARNING : System may be too stiff to integrate')
                         warning_given = True
+                    redo=False
                     new_dt = dt_min
                 else:
                     dt = new_dt
@@ -748,6 +749,7 @@ class NCell:
             # update time
             self.t.append(self.t[self.time] + dt)
             self.time += 1
+            dt_old = dt
             dt = new_dt
             # run events
             self.sim_events()

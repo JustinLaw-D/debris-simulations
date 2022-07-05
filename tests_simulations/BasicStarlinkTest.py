@@ -16,8 +16,12 @@ from multiprocessing import Pool
 def to_run(atmosphere, lamfac=None, alpha=None):
     directory = "BasicStarlinkData/"
     name = str(lamfac) + "x" + str(alpha)
-    atmosphere.run_sim_precor(T, mindtfactor=10000)
-    atmosphere.save(directory, name, gap=0.01)
+    T_loc = 1
+    while T_loc <= T:
+        atmosphere.run_sim_precor(T_loc, mindtfactor=10000)
+        print(name + " done to T = " + str(T_loc)) 
+        atmosphere.save(directory, name, gap=0.01, force=True)
+        T_loc += 1
     return True
 
 def gen_atmosphere(args):
