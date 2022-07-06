@@ -284,7 +284,6 @@ class Cell:
             tot_D_sat_coll = 0 # total collisions destroying derelicts of this type
             for j in range(self.num_sat_types):
                 S2 = self.satellites[j].S[time]
-                S_d2 = self.satellites[j].S_d[time]
                 D2 = self.satellites[j].D[time]
                 sigma2 = self.satellites[j].sigma
                 alphaS2 = self.satellites[j].alphaS

@@ -106,7 +106,6 @@ class Satellite:
         data_dict = np.load(filepath + "data.npz")
         sat.S = data_dict['S'].tolist()
         sat.D = data_dict['D'].tolist()
-        sat.S_d = data_dict['S_d'].tolist()
 
         return sat
 
@@ -224,13 +223,12 @@ class Event:
         self.freq = freq
         self.alt = alt
 
-    def run_event(self, S, S_d, D, R, N, logL_edges, chi_edges):
+    def run_event(self, S, D, R, N, logL_edges, chi_edges):
         '''
         function representing the discrete event occuring
 
         Input(s):
         S : number of live satellites of each type in the current cell (list of floats)
-        S_d : number of de-orbiting satellites of each type in the current cell (list of floats)
         D : number of derelict satellites of each type in the current cell (list of floats)
         R : number of rocket bodies of each type in the current cell (list of floats)
         N : binned amount of debris in current cell (2d array)
@@ -241,7 +239,6 @@ class Event:
 
         Output(s):
         dS : change in the number of live satellites of each type in the current cell (array of floats)
-        dS_d : change in the number of de-orbiting satellites of each type in the current cell (array of floats)
         dD : change in the number of derelict satellites of each type in the cell (array of floats)
         dR : change in the number of rocket bodies of each type in the cell (array of floats)
         dN : change in the number of debris in the curren cell, not including debris
@@ -256,7 +253,7 @@ class Event:
                  zero
         '''
 
-        return np.zeros(S.shape), np.zeros(S_d.shape), np.zeros(D.shape), np.zeros(R.shape), np.zeros(N.shape), [], []
+        return np.zeros(S.shape), np.zeros(D.shape), np.zeros(R.shape), np.zeros(N.shape), [], []
 
 # class for handling basic explosions
 class ExplEvent(Event):
@@ -282,13 +279,12 @@ class ExplEvent(Event):
         super().__init__(alt, time=time, freq=freq)
         self.expl_list = expl_list
 
-    def run_event(self, S, S_d, D, R, N, logL_edges, chi_edges):
+    def run_event(self, S, D, R, N, logL_edges, chi_edges):
         '''
         function representing the discrete event occuring
 
         Input(s):
         S : number of live satellites of each type in the current cell (list of floats)
-        S_d : number of de-orbiting satellites of each type in the current cell (list of floats)
         D : number of derelict satellites of each type in the current cell (list of floats)
         R : number of rocket bodies of each type in the current cell (list of floats)
         N : binned amount of debris in current cell (2d array)
@@ -299,7 +295,6 @@ class ExplEvent(Event):
 
         Output(s):
         dS : change in the number of live satellites of each type in the current cell (array of floats)
-        dS_d : change in the number of de-orbiting satellites of each type in the current cell (array of floats)
         dD : change in the number of derelict satellites of each type in the cell (array of floats)
         dR : change in the number of rocket bodies of each type in the cell (array of floats)
         dN : change in the number of debris in the curren cell, not including debris
@@ -314,7 +309,7 @@ class ExplEvent(Event):
                  zero
         '''
 
-        return np.zeros(S.shape), np.zeros(S_d.shape), np.zeros(D.shape), np.zeros(R.shape), np.zeros(N.shape), [], self.expl_list
+        return np.zeros(S.shape), np.zeros(D.shape), np.zeros(R.shape), np.zeros(N.shape), [], self.expl_list
 
 # class for handling basic collisions
 class CollEvent(Event):
@@ -341,13 +336,12 @@ class CollEvent(Event):
         super().__init__(alt, time=time, freq=freq)
         self.coll_list = coll_list
 
-    def run_event(self, S, S_d, D, R, N, logL_edges, chi_edges):
+    def run_event(self, S, D, R, N, logL_edges, chi_edges):
         '''
         function representing the discrete event occuring
 
         Input(s):
         S : number of live satellites of each type in the current cell (list of floats)
-        S_d : number of de-orbiting satellites of each type in the current cell (list of floats)
         D : number of derelict satellites of each type in the current cell (list of floats)
         R : number of rocket bodies of each type in the current cell (list of floats)
         N : binned amount of debris in current cell (2d array)
@@ -358,7 +352,6 @@ class CollEvent(Event):
 
         Output(s):
         dS : change in the number of live satellites in the current cell (array of floats)
-        dS_d : change in the number of de-orbiting satellites in the current cell (array of floats)
         dD : change in the number of derelict satellites in the cell (array of floats)
         dR : change in the number of rocket bodies of each type in the cell (array of floats)
         dN : change in the number of debris in the curren cell, not including debris
@@ -373,4 +366,4 @@ class CollEvent(Event):
                  zero
         '''
 
-        return np.zeros(S.shape), np.zeros(S_d.shape), np.zeros(D.shape), np.zeros(R.shape), np.zeros(N.shape), self.coll_list, []
+        return np.zeros(S.shape), np.zeros(D.shape), np.zeros(R.shape), np.zeros(N.shape), self.coll_list, []

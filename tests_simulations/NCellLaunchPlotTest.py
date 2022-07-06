@@ -7,8 +7,8 @@ import numpy as np
 atmosphere = NCell.load('./NCellLaunchData/')
 t = atmosphere.get_t()
 T = t[-1]
-S0, S1, S2 = atmosphere.get_S()[0][0], atmosphere.get_S()[3][1], atmosphere.get_S()[-1][2]
-D0, D1, D2 = atmosphere.get_D()[0][0], atmosphere.get_D()[3][1], atmosphere.get_D()[-1][2]
+S0, S1, S2 = atmosphere.get_S()[0][0], atmosphere.get_S()[3][0], atmosphere.get_S()[-1][0]
+D0, D1, D2 = atmosphere.get_D()[0][0], atmosphere.get_D()[3][0], atmosphere.get_D()[-1][0]
 N0, N1, N2 = atmosphere.get_N()[0], atmosphere.get_N()[3], atmosphere.get_N()[-1]
 
 import matplotlib.pyplot as plt
@@ -26,7 +26,7 @@ ax1.plot(t, D2, label='D2')
 ax1.plot(t, N0, label='N0')
 ax1.plot(t, N1, label='N1')
 ax1.plot(t, N2, label='N2')
-ax1.set_ylim(1, 1e6)
+ax1.set_ylim(1, 1e10)
 ax1.set_xlim(0,T)
 ax1.legend()
 

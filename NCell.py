@@ -679,7 +679,6 @@ class NCell:
                 old_N = curr_cell.N_bins[self.time+1]
                 for j in range(curr_cell.num_sat_types):
                     old_S = curr_cell.satellites[j].S[self.time+1] # keep old values
-                    old_Sd = curr_cell.satellites[j].S_d[self.time+1]
                     old_D = curr_cell.satellites[j].D[self.time+1]
                     curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + 0.5*(dSdt_n2[i][j]+dSdt_n1[i][j])*dt
                     if curr_cell.satellites[j].S[self.time] != 0:
@@ -828,22 +827,21 @@ class NCell:
         for i in range(self.num_cells):
 
             curr_cell = self.cells[i]
-            dS, dS_d, dD = np.zeros(curr_cell.num_sat_types), np.zeros(curr_cell.num_sat_types), np.zeros(curr_cell.num_sat_types)
+            dS, dD = np.zeros(curr_cell.num_sat_types), np.zeros(curr_cell.num_sat_types)
             dR = np.zeros(curr_cell.num_rb_types)
             dN_loc = np.zeros((self.num_L, self.num_chi)) # debris change from non-collision sources
             coll_list = []
             expl_list = []
-            S, S_d, D, R = self.get_curr_S(self.time)[i], self.get_curr_SD(self.time)[i], self.get_curr_D(self.time)[i], self.get_curr_R(self.time)[i]
+            S, D, R = self.get_curr_S(self.time)[i], self.get_curr_D(self.time)[i], self.get_curr_R(self.time)[i]
             N = curr_cell.N_bins[self.time]
 
             for event in curr_cell.event_list: # iterate through possible events
 
                 if event.time is not None: # events at specific times
                     while event.time != [] and event.time[0] <= self.t[self.time]:
-                        dS_temp, dS_d_temp, dD_temp, dR_temp, dN_loc_temp, coll_temp, expl_temp = event.run_event(S, S_d, D, R, N, self.logL_edges, self.chi_edges)
+                        dS_temp, dD_temp, dR_temp, dN_loc_temp, coll_temp, expl_temp = event.run_event(S, D, R, N, self.logL_edges, self.chi_edges)
                         event.time.pop(0)
                         dS += dS_temp
-                        dS_d += dS_d_temp
                         dD += dD_temp
                         dR += dR_temp
                         dN_loc += dN_loc_temp
@@ -852,9 +850,8 @@ class NCell:
 
                 if event.freq is not None: # events occuring at specific frequencies
                     if self.t[self.time] - event.last_event <= event.freq:
-                        dS_temp, dS_d_temp, dD_temp, dR_temp, dN_loc_temp, coll_temp, expl_temp = event.run_event(S, S_d, D, R, N, self.logL_edges, self.chi_edges)
+                        dS_temp, dD_temp, dR_temp, dN_loc_temp, coll_temp, expl_temp = event.run_event(S, D, R, N, self.logL_edges, self.chi_edges)
                         dS += dS_temp
-                        dS_d += dS_d_temp
                         dD += dD_temp
                         dR += dR_temp
                         dN_loc += dN_loc_temp
@@ -864,7 +861,6 @@ class NCell:
                 # update values
                 for j in range(curr_cell.num_sat_types):
                     curr_cell.satellites[j].S[self.time] += dS[j]
-                    curr_cell.satellites[j].S_d[self.time] += dS_d[j]
                     curr_cell.satellites[j].D[self.time] += dD[j]
                 for j in range(curr_cell.num_rb_types):
                     curr_cell.rockets[j].num[self.time] += dR[j]
