@@ -69,10 +69,6 @@ class Cell:
         for i in range(self.num_rb_types):
             self.lethal_rb_N.append(np.full(self.N_bins[0].shape, False)) 
         self.update_lethal_N()
-        self.ascending = np.full(self.num_sat_types, False) # list of which satellite types are ascending
-        for i in range(self.num_sat_types):
-            sat = self.satellites[i]
-            if sat.target_alt > self.alt + self.dh/2 : self.ascending[i] = True
 
     def save(self, filepath, filter, compress=True):
         '''
@@ -101,7 +97,7 @@ class Cell:
         # write easy arrays
         Cl_array, Cnl_array = np.array(self.C_l)[filter], np.array(self.C_nl)[filter]
         to_save = {'C_l' : Cl_array, 'C_nl' : Cnl_array, 'tau_N' : self.tau_N, 'trackable' : self.trackable,
-                   'ascending' : self.ascending, 'logL' : self.logL_edges, 'chi' : self.chi_edges}
+                   'logL' : self.logL_edges, 'chi' : self.chi_edges}
         if compress : np.savez_compressed(filepath + "data.npz", **to_save)
         else : np.savez(filepath + "data.npz", **to_save)
 
@@ -171,7 +167,6 @@ class Cell:
         cell.C_nl = array_dict['C_nl'].tolist()
         cell.tau_N = array_dict['tau_N']
         cell.trackable = array_dict['trackable']
-        cell.ascending = array_dict['ascending']
         cell.logL_edges = array_dict['logL']
         cell.chi_edges = array_dict['chi']
 
@@ -222,13 +217,12 @@ class Cell:
 
         Output(s):
         dSdt : array of rate of change of the number of live satellites in the cell of each type due to only processes
-               withing the cell (excluding satellites ascending) (yr^(-1))
+               withing the cell (but including satellite launches) (yr^(-1))
         dS_ddt : array of rate of change of the number of de-orbiting satellites in the cell of each type
                  (excluding satellites de-orbiting) (yr^(-1))
         dDdt : array of rate of change of the number of derelict satellites in the cell of each type
                (excluding derelicts decaying) (yr^(-1))
         dRdt : array of rate of change of number of rocket bodies in the cell of each type (excluding rockets decaying) (yr^(-1))
-        S_out : array of rate of satellites ascending from the cell of each type (yr^(-1))
         S_dout : array of rate of satellites de-orbiting from the cell of each type (yr^(-1))
         D_out : array of rate of satellites decaying from the cell of each type (yr^(-1))
         R_out : array of rate of rocket bodies decaying from the cell of each type (yr^(-1))
@@ -264,7 +258,6 @@ class Cell:
         dRdt = np.zeros((self.num_rb_types, self.num_L, self.num_chi)) # collisions with rocket bodies
         dRRdt = np.zeros((self.num_rb_types, self.num_rb_types)) # collisions between rocket bodies
         decay_N = np.zeros(N.shape) # rate of debris that decay
-        ascend_S = np.zeros(self.num_sat_types) # rate of satellites ascending into a higher orbit
         kill_S = np.zeros(self.num_sat_types) # rate of satellites being put into de-orbit
         deorbit_S = np.zeros(self.num_sat_types) # rate of satellites de-orbiting out of the band
         decay_D = np.zeros(self.num_sat_types) # rate of derelicts that decay
@@ -335,17 +328,16 @@ class Cell:
             expl_Sd[i] = expl_rate_L*S_d/100
             expl_D[i] = expl_rate_D*D/100
 
-            # compute decay/ascend events for satellites
-            up_time = self.satellites[i].up_time
+            # compute decay events for satellites
+            lam = self.satellites[i].lam
             del_t = self.satellites[i].del_t
             tau_do = self.satellites[i].tau_do
             tau = self.satellites[i].tau
             kill_S[i], deorbit_S[i], decay_D[i] = S/del_t, S_d/tau_do, D/tau
-            if self.ascending[i] : ascend_S[i] = S/up_time
 
             # sum everything up
             P = self.satellites[i].P
-            dSdt_tot[i] = 0 - kill_S[i] - np.sum(dSdt[i,:,:]) - tot_S_sat_coll - expl_S[i]
+            dSdt_tot[i] = lam - kill_S[i] - np.sum(dSdt[i,:,:]) - tot_S_sat_coll - expl_S[i]
             dS_ddt_tot[i] = P*kill_S[i] - np.sum(dS_ddt[i,:,:]) - tot_Sd_sat_coll - expl_Sd[i]
             dDdt_tot[i] = (1-P)*kill_S[i] - np.sum(dDdt[i,:,:][self.lethal_sat_N[i] == True])  - tot_D_sat_coll + np.sum(dSdt[i,:,:][self.lethal_sat_N[i] == False]) + np.sum(dS_ddt[i,:,:][self.lethal_sat_N[i] == False]) - expl_D[i]
             CS_dt[i,:,:] = dSdt[i,:,:] + dS_ddt[i,:,:] + dDdt[i,:,:]
@@ -393,7 +385,7 @@ class Cell:
         R_dt = dRRdt
         expl_S_tot = expl_S + expl_Sd + expl_D
 
-        return dSdt_tot, dS_ddt_tot, dDdt_tot, dRdt_tot, ascend_S, deorbit_S, decay_D, decay_R, decay_N, D_dt, RD_dt, R_dt, CS_dt, CR_dt, expl_S_tot, expl_R
+        return dSdt_tot, dS_ddt_tot, dDdt_tot, dRdt_tot, deorbit_S, decay_D, decay_R, decay_N, D_dt, RD_dt, R_dt, CS_dt, CR_dt, expl_S_tot, expl_R
 
     def N_sat_events(self, S, S_d, D, N, sigma, alpha):
         '''

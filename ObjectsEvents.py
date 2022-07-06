@@ -5,8 +5,7 @@ import csv
 
 class Satellite:
 
-    def __init__(self, S_i, S_di, D_i, m, sigma, lam, del_t, tau_do, target_alt, up_time, alpha,
-                 P, AM, tau, C, expl_rate_L, expl_rate_D):
+    def __init__(self, S_i, S_di, D_i, m, sigma, lam, del_t, tau_do, alpha, P, AM, tau, C, expl_rate_L, expl_rate_D):
         '''
         constructor method for Satellite class
 
@@ -19,8 +18,6 @@ class Satellite:
         lam : launch rate of the satellites (1/yr)
         del_t : mean satellite lifetime (yr)
         tau_do : mean time for satellite to de-orbit from shell (yr)
-        target_alt : target final altitude for the satellite type (km)
-        up_time : amount of time it takes a satellite to ascend through the band (yr)
         alpha : tuple of (alphaS, alphaD, alphaN, alphaR), which are the fraction of collisions a
                 live satellite fails to avoid with a live satellite, derelict, trackable debris,
                 and rocket body respectively
@@ -48,8 +45,6 @@ class Satellite:
         self.lam = lam
         self.del_t = del_t
         self.tau_do = tau_do
-        self.target_alt = target_alt
-        self.up_time = up_time
         self.alphaS, self.alphaD, self.alphaN, self.alphaR = alpha
         self.P = P
         self.AM = AM
@@ -75,9 +70,9 @@ class Satellite:
         # save parameters
         csv_file = open(filepath + 'params.csv', 'w', newline='')
         csv_writer = csv.writer(csv_file, dialect='unix')
-        csv_writer.writerow([self.m, self.sigma, self.lam, self.del_t, self.tau_do, self.target_alt, 
-                             self.up_time, self.alphaS, self.alphaD, self.alphaN, self.alphaR, self.P, 
-                             self.AM, self.tau, self.C, self.expl_rate_L, self.expl_rate_D])
+        csv_writer.writerow([self.m, self.sigma, self.lam, self.del_t, self.tau_do, self.alphaS, self.alphaD, 
+                             self.alphaN, self.alphaR, self.P, self.AM, self.tau, self.C, self.expl_rate_L, 
+                             self.expl_rate_D])
         csv_file.close()
 
         # save data
@@ -106,10 +101,9 @@ class Satellite:
         csv_reader = csv.reader(csv_file, dialect='unix')
         for row in csv_reader: # there's only one row, but this extracts it
             sat.m, sat.sigma, sat.lam, sat.del_t = float(row[0]), float(row[1]), float(row[2]), float(row[3])
-            sat.tau_do, sat.target_alt, sat.up_time, sat.alphaS = float(row[4]), float(row[5]), float(row[6]), float(row[7])
-            sat.alphaD, sat.alphaN, sat.alphaR, sat.P = float(row[8]), float(row[9]), float(row[10]), float(row[11])
-            sat.AM, sat.tau, sat.C, sat.expl_rate_L = float(row[12]), float(row[13]), float(row[14]), float(row[15])
-            sat.expl_rate_D = float(row[16])
+            sat.tau_do, sat.alphaS, sat.alphaD, sat.alphaN = float(row[4]), float(row[5]), float(row[6]), float(row[7])
+            sat.alphaR, sat.P, sat.AM, sat.tau = float(row[8]), float(row[9]), float(row[10]), float(row[11])
+            sat.C, sat.expl_rate_L, sat.expl_rate_D = float(row[12]), float(row[13]), float(row[14])
         csv_file.close()
 
         # load data

@@ -601,7 +601,8 @@ def rand_direction(num):
     the second y-coordinates, and the third z-coordinates
     '''
 
-    theta = np.random.uniform(0.0, np.pi, size=num) # generate inclinations
+    P = np.random.uniform(0.0, 1, size=num) # used to generate inclinations
+    theta = np.arccos(1-2*P) # invert cumulative density function
     phi = np.random.uniform(0.0, 2*np.pi, size=num) # generate azimuthal angles
     to_return = np.zeros((3, num)) # first row is x, second is y, third is z
     to_return[0, :] = np.cos(phi)*np.sin(theta)

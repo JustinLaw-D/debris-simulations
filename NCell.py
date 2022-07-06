@@ -16,8 +16,8 @@ Me = 5.97219e24 # mass of Earth (kg)
 
 class NCell:
 
-    def __init__(self, S, S_d, D, N_l, target_alts, alt_edges, lam, drag_lifetime, update_lifetime, events=[], R_i=None, 
-                lam_rb=None, up_time=None, del_t=None, expl_rate_L=None, expl_rate_D=None, C_sat=None, sigma_sat=None, 
+    def __init__(self, S, S_d, D, N_l, alt_edges, lam, drag_lifetime, update_lifetime, events=[], R_i=None, 
+                lam_rb=None, del_t=None, expl_rate_L=None, expl_rate_D=None, C_sat=None, sigma_sat=None, 
                 expl_rate_R=None, C_rb=None, sigma_rb=None, v=None, delta=None, alphaS=None, alphaD=None, alphaN=None, 
                 alphaR=None, P=None, m_s=None, m_rb=None, AM_sat=None, AM_rb=None, tau_do=None, L_min=1e-3, L_max=1, 
                 num_L=10, chi_min=-2, chi_max=1.5, num_chi=10, num_dir=100):
@@ -29,9 +29,8 @@ class NCell:
         S_d : list of initial number of deorbiting satellites in each shell of each type (list of arrays)
         D : list of initial number of derelict satellites in each shell of each type (list of arrays)
         N_l : initial number of catestrophically lethal debris in each shell (array)
-        target_alts : list of target altitude of each satellite type (array, km)
         alt_edges : edges of the altitude bands to be used (array, km)
-        lam : launch rate of satellites of each type (array, 1/yr)
+        lam : launch rate of satellites of each type into each shells (list of arrays, 1/yr)
         drag_lifetime : function that computes atmospheric drag lifetime ((km, km, m^2/kg, yr) -> yr)
         update_lifetime : function that determines when the drag lifetime needs to be updated ((yr, yr) -> bool)
 
@@ -39,7 +38,6 @@ class NCell:
         events : the discrete events occuring in the system (list of Event objects, default no events)
         R_i : list of rocket bodies in each shell of each type (list of lists, default no rocket bodies)
         lam_rb : launch rate of rocket bodies of each type into the each shell (list of arrays, 1/yr, default all 0)
-        up_time : ascention time of satellites of each type in each shell (list of arrays, yr, default all 1/10yr)
         del_t : mean satellite lifetime of each type in each shell (list of lists, yr, default 5yr)
         expl_rate_L : number of explosions that occur in a 1yr period with a population of 100 live satellites for
                       each type of satellite (list of floats, default all 0)
@@ -63,7 +61,7 @@ class NCell:
                  avoid in each shell (list of lists, default alphaN)
         P : post-mission disposal probability for satellites of each type in each shell (list of lists, default 0.95)
         m_s : mass of the satallites of each type (list, kg, default 250kg)
-        m_s : mass of the rocket bodies of each type (list, kg, default 250kg)
+        m_rb : mass of the rocket bodies of each type (list, kg, default 250kg)
         AM_sat : area-to-mass ratio of the satallites of each type (list, m^2/kg, default 1/(20*2.2)m^2/kg)
         AM_rb : area-to-mass ratio of the rocket bodies of each type (list, m^2/kg, default 1/(20*2.2)m^2/kg)
         tau_do : average deorbiting time for satellites of each type in each shell (list of lists, yr, default decay_time/10)
@@ -91,8 +89,6 @@ class NCell:
             R_i = [[]]*len(S)
         if lam_rb is None:
             lam_rb = [None]*len(S)
-        if up_time is None:
-            up_time = [None]*len(S)
         if del_t is None:
             del_t = [None]*len(S)
         if v is None:
@@ -138,8 +134,6 @@ class NCell:
             # convert Nones to array of Nones
             if lam_rb[i] is None:
                 lam_rb[i] = [None]*len(R_i[i])
-            if up_time[i] is None:
-                up_time[i] = [None]*len(S[i])
             if del_t[i] is None:
                 del_t[i] = [None]*len(S[i])
             if expl_rate_L is None:
@@ -182,8 +176,6 @@ class NCell:
             for j in range(len(S[0])): # iterate through satellite types, and generate object for each
                 
                 # convert Nones to default values
-                if up_time[i][j] is None:
-                    up_time[i][j] = 1/10
                 if del_t[i][j] is None:
                     del_t[i][j] = 5
                 if expl_rate_L[j] is None:
@@ -213,9 +205,9 @@ class NCell:
                 tau = drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, AM_sat[j], 0)
                 if tau_do[i][j] is None:
                     tau_do[i][j] = tau/10
-                sat = Satellite(S[i][j], S_d[i][j], D[i][j], m_s[j], sigma_sat[j], lam[j], del_t[i][j],
-                                tau_do[i][j], target_alts[j], up_time[i][j], (alphaS[i][j], alphaD[i][j],
-                                alphaN[i][j], alphaR[i][j]), P[i][j], AM_sat[j], tau, C_sat[j], expl_rate_L[j], expl_rate_D[j])
+                sat = Satellite(S[i][j], S_d[i][j], D[i][j], m_s[j], sigma_sat[j], lam[i][j], del_t[i][j],
+                                tau_do[i][j], (alphaS[i][j], alphaD[i][j], alphaN[i][j], alphaR[i][j]),
+                                P[i][j], AM_sat[j], tau, C_sat[j], expl_rate_L[j], expl_rate_D[j])
                 sat_list.append(sat)
 
             rb_list = []
@@ -507,9 +499,6 @@ class NCell:
         NR_expl = np.zeros((self.num_cells, num_rb_types)) # array of explosion values for rockets
 
         # get initial D_in, N_in values
-        S_in = np.zeros((self.num_cells+1, num_sat_types))
-        for i in range(num_sat_types):
-            S_in[0,i] = top_cell.satellites[i].lam
         S_din = np.zeros((self.num_cells+1, num_sat_types))
         D_in = np.zeros((self.num_cells+1, num_sat_types))
         R_in = np.zeros((self.num_cells+1, num_rb_types))
@@ -519,7 +508,7 @@ class NCell:
         # iterate through cells, from top to bottom
         for i in range(self.num_cells):
             curr_cell = self.cells[i]
-            dSdt[i,:], dS_ddt[i,:], dDdt[i,:], dRdt[i,:], S_in[i+1,:], S_din[i,:], D_in[i,:], R_in[i,:], N_in[i,:,:], sat_coll[i,:,:], RS_coll[i,:,:], R_coll[i,:,:], NS_coll[i,:,:,:], NR_coll[i,:,:,:], NS_expl[i,:], NR_expl[i,:] = curr_cell.dxdt_cell(time)
+            dSdt[i,:], dS_ddt[i,:], dDdt[i,:], dRdt[i,:], S_din[i,:], D_in[i,:], R_in[i,:], N_in[i,:,:], sat_coll[i,:,:], RS_coll[i,:,:], R_coll[i,:,:], NS_coll[i,:,:,:], NR_coll[i,:,:,:], NS_expl[i,:], NR_expl[i,:] = curr_cell.dxdt_cell(time)
             # simulate collisions and explosions
             for j in range(num_sat_types): # iterate through satellite types
 
@@ -570,7 +559,6 @@ class NCell:
 
         # go through cells from bottom to top to correct values
         for i in range(self.num_cells):
-            dSdt[i] += S_in[i,:] - S_in[i+1,:]
             dS_ddt[i] += S_din[i+1,:] - S_din[i,:]
             dDdt[i] += D_in[i+1,:] - D_in[i,:]
             dRdt[i] += R_in[i+1,:] - R_in[i,:]
