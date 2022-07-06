@@ -5,19 +5,17 @@ import csv
 
 class Satellite:
 
-    def __init__(self, S_i, S_di, D_i, m, sigma, lam, del_t, tau_do, alpha, P, AM, tau, C, expl_rate_L, expl_rate_D):
+    def __init__(self, S_i, D_i, m, sigma, lam, del_t, alpha, P, AM, tau, C, expl_rate_L, expl_rate_D):
         '''
         constructor method for Satellite class
 
         Parameter(s):
         S_i : initial number of live satellites of this type
-        S_di : initial number of de-orbiting satellites of this type
         D_i : initial number of derelict satellites of this type
         m : mass of each satellite (kg)
         sigma : collision cross-section of each satellite (m^2)
         lam : launch rate of the satellites (1/yr)
         del_t : mean satellite lifetime (yr)
-        tau_do : mean time for satellite to de-orbit from shell (yr)
         alpha : tuple of (alphaS, alphaD, alphaN, alphaR), which are the fraction of collisions a
                 live satellite fails to avoid with a live satellite, derelict, trackable debris,
                 and rocket body respectively
@@ -38,13 +36,11 @@ class Satellite:
         '''
 
         self.S = [S_i]
-        self.S_d = [S_di]
         self.D = [D_i]
         self.m = m
         self.sigma = sigma
         self.lam = lam
         self.del_t = del_t
-        self.tau_do = tau_do
         self.alphaS, self.alphaD, self.alphaN, self.alphaR = alpha
         self.P = P
         self.AM = AM
@@ -70,14 +66,14 @@ class Satellite:
         # save parameters
         csv_file = open(filepath + 'params.csv', 'w', newline='')
         csv_writer = csv.writer(csv_file, dialect='unix')
-        csv_writer.writerow([self.m, self.sigma, self.lam, self.del_t, self.tau_do, self.alphaS, self.alphaD, 
+        csv_writer.writerow([self.m, self.sigma, self.lam, self.del_t, self.alphaS, self.alphaD, 
                              self.alphaN, self.alphaR, self.P, self.AM, self.tau, self.C, self.expl_rate_L, 
                              self.expl_rate_D])
         csv_file.close()
 
         # save data
-        S_array, Sd_array, D_array = np.array(self.S)[filter], np.array(self.S_d)[filter], np.array(self.D)[filter]
-        to_save = {'S' : S_array, 'S_d' : Sd_array, 'D' : D_array}
+        S_array, D_array = np.array(self.S)[filter], np.array(self.D)[filter]
+        to_save = {'S' : S_array, 'D' : D_array}
         if compress : np.savez_compressed(filepath + "data.npz", **to_save)
         else : np.savez(filepath + "data.npz", **to_save)
 
@@ -101,9 +97,9 @@ class Satellite:
         csv_reader = csv.reader(csv_file, dialect='unix')
         for row in csv_reader: # there's only one row, but this extracts it
             sat.m, sat.sigma, sat.lam, sat.del_t = float(row[0]), float(row[1]), float(row[2]), float(row[3])
-            sat.tau_do, sat.alphaS, sat.alphaD, sat.alphaN = float(row[4]), float(row[5]), float(row[6]), float(row[7])
-            sat.alphaR, sat.P, sat.AM, sat.tau = float(row[8]), float(row[9]), float(row[10]), float(row[11])
-            sat.C, sat.expl_rate_L, sat.expl_rate_D = float(row[12]), float(row[13]), float(row[14])
+            sat.alphaS, sat.alphaD, sat.alphaN, sat.alphaR = float(row[4]), float(row[5]), float(row[6]), float(row[7])
+            sat.P, sat.AM, sat.tau, sat.C = float(row[8]), float(row[9]), float(row[10]), float(row[11])
+            sat.expl_rate_L, sat.expl_rate_D = float(row[12]), float(row[13])
         csv_file.close()
 
         # load data

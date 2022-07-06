@@ -16,17 +16,16 @@ Me = 5.97219e24 # mass of Earth (kg)
 
 class NCell:
 
-    def __init__(self, S, S_d, D, N_l, alt_edges, lam, drag_lifetime, update_lifetime, events=[], R_i=None, 
+    def __init__(self, S, D, N_l, alt_edges, lam, drag_lifetime, update_lifetime, events=[], R_i=None, 
                 lam_rb=None, del_t=None, expl_rate_L=None, expl_rate_D=None, C_sat=None, sigma_sat=None, 
                 expl_rate_R=None, C_rb=None, sigma_rb=None, v=None, delta=None, alphaS=None, alphaD=None, alphaN=None, 
-                alphaR=None, P=None, m_s=None, m_rb=None, AM_sat=None, AM_rb=None, tau_do=None, L_min=1e-3, L_max=1, 
+                alphaR=None, P=None, m_s=None, m_rb=None, AM_sat=None, AM_rb=None, L_min=1e-3, L_max=1, 
                 num_L=10, chi_min=-2, chi_max=1.5, num_chi=10, num_dir=100):
         '''
         Constructor for NCell class
     
         Parameter(s):
         S : list of initial number of live satellites in each shell of each type (list of arrays)
-        S_d : list of initial number of deorbiting satellites in each shell of each type (list of arrays)
         D : list of initial number of derelict satellites in each shell of each type (list of arrays)
         N_l : initial number of catestrophically lethal debris in each shell (array)
         alt_edges : edges of the altitude bands to be used (array, km)
@@ -64,7 +63,6 @@ class NCell:
         m_rb : mass of the rocket bodies of each type (list, kg, default 250kg)
         AM_sat : area-to-mass ratio of the satallites of each type (list, m^2/kg, default 1/(20*2.2)m^2/kg)
         AM_rb : area-to-mass ratio of the rocket bodies of each type (list, m^2/kg, default 1/(20*2.2)m^2/kg)
-        tau_do : average deorbiting time for satellites of each type in each shell (list of lists, yr, default decay_time/10)
         L_min : minimum characteristic length to consider (m, default 1mm)
         L_max : maximum characteristic length to consider (m, default 1m)
         num_L : number of debris bins in characteristic length (default 10)
@@ -105,8 +103,6 @@ class NCell:
             alphaR = [None]*len(S)
         if P is None:
             P = [None]*len(S)
-        if tau_do is None:
-            tau_do = [None]*len(S)
 
         self.alts = np.zeros(len(alt_edges)-1)
         self.dh = np.zeros(self.alts.shape)
@@ -168,8 +164,6 @@ class NCell:
                 AM_sat = [None]*len(S[i])
             if AM_rb is None:
                 AM_rb = [None]*len(R_i[i])
-            if tau_do[i] is None:
-                tau_do[i] = [None]*len(S[i])
 
             sat_list = []
 
@@ -203,11 +197,9 @@ class NCell:
 
                 # compute atmospheric drag lifetime for satallites in the shell
                 tau = drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, AM_sat[j], 0)
-                if tau_do[i][j] is None:
-                    tau_do[i][j] = tau/10
-                sat = Satellite(S[i][j], S_d[i][j], D[i][j], m_s[j], sigma_sat[j], lam[i][j], del_t[i][j],
-                                tau_do[i][j], (alphaS[i][j], alphaD[i][j], alphaN[i][j], alphaR[i][j]),
-                                P[i][j], AM_sat[j], tau, C_sat[j], expl_rate_L[j], expl_rate_D[j])
+                sat = Satellite(S[i][j], D[i][j], m_s[j], sigma_sat[j], lam[i][j], del_t[i][j], (alphaS[i][j], 
+                                alphaD[i][j], alphaN[i][j], alphaR[i][j]), P[i][j], AM_sat[j], tau, C_sat[j], 
+                                expl_rate_L[j], expl_rate_D[j])
                 sat_list.append(sat)
 
             rb_list = []
@@ -471,7 +463,6 @@ class NCell:
 
         Output(s):
         dSdt : list of rates of change in S for each cell (1/yr)
-        dS_ddt : list of rates of change in S_d for each cell (1/yr)
         dDdt : list of rates of change in D for each cell (1/yr)
         dRdt : list of rates of change in R for each cell (1/yr)
         dNdt : list of rates of change in the N matrix for each cell (1/yr)
@@ -486,7 +477,6 @@ class NCell:
         num_rb_types = top_cell.num_rb_types
         top_Nin = self.upper_N/top_cell.tau_N # debris going into top cell
         dSdt = np.zeros((self.num_cells, num_sat_types)) # array of changes in satallite values
-        dS_ddt = np.zeros((self.num_cells, num_sat_types)) # array of changes in de-orbiting values
         dDdt = np.zeros((self.num_cells, num_sat_types)) # array of changes in derelict values
         dRdt = np.zeros((self.num_cells, num_rb_types)) # array of changes in rocket body values
         dNdt =  np.zeros((self.num_cells, self.num_L, self.num_chi)) # array of changes in debris values
@@ -499,7 +489,6 @@ class NCell:
         NR_expl = np.zeros((self.num_cells, num_rb_types)) # array of explosion values for rockets
 
         # get initial D_in, N_in values
-        S_din = np.zeros((self.num_cells+1, num_sat_types))
         D_in = np.zeros((self.num_cells+1, num_sat_types))
         R_in = np.zeros((self.num_cells+1, num_rb_types))
         N_in  = np.zeros((self.num_cells+1, self.num_L, self.num_chi))
@@ -508,7 +497,7 @@ class NCell:
         # iterate through cells, from top to bottom
         for i in range(self.num_cells):
             curr_cell = self.cells[i]
-            dSdt[i,:], dS_ddt[i,:], dDdt[i,:], dRdt[i,:], S_din[i,:], D_in[i,:], R_in[i,:], N_in[i,:,:], sat_coll[i,:,:], RS_coll[i,:,:], R_coll[i,:,:], NS_coll[i,:,:,:], NR_coll[i,:,:,:], NS_expl[i,:], NR_expl[i,:] = curr_cell.dxdt_cell(time)
+            dSdt[i,:], dDdt[i,:], dRdt[i,:], D_in[i,:], R_in[i,:], N_in[i,:,:], sat_coll[i,:,:], RS_coll[i,:,:], R_coll[i,:,:], NS_coll[i,:,:,:], NR_coll[i,:,:,:], NS_expl[i,:], NR_expl[i,:] = curr_cell.dxdt_cell(time)
             # simulate collisions and explosions
             for j in range(num_sat_types): # iterate through satellite types
 
@@ -559,7 +548,6 @@ class NCell:
 
         # go through cells from bottom to top to correct values
         for i in range(self.num_cells):
-            dS_ddt[i] += S_din[i+1,:] - S_din[i,:]
             dDdt[i] += D_in[i+1,:] - D_in[i,:]
             dRdt[i] += R_in[i+1,:] - R_in[i,:]
             dNdt[i] += N_in[i+1,:] - N_in[i,:]
@@ -579,7 +567,7 @@ class NCell:
                 dCldt[i] += np.sum(sum(NR_coll[i])[lethal_table==True])
                 dCnldt[i] += np.sum(sum(NR_coll[i])[lethal_table==False])
 
-        return dSdt, dS_ddt, dDdt, dRdt, dNdt, dCldt, dCnldt
+        return dSdt, dDdt, dRdt, dNdt, dCldt, dCnldt
 
     def run_sim_euler(self, T, dt=1, upper=True):
         '''
@@ -601,7 +589,7 @@ class NCell:
             if self.update_lifetime(self.t[self.time], self.t[self.lupdate_time]):
                     self.update_lifetimes(self.t[self.time])
                     self.lupdate_time = self.time
-            dSdt, dS_ddt, dDdt, dRdt, dNdt, dCldt, dCnldt = self.dxdt(self.time, upper) # get current rates of change
+            dSdt, dDdt, dRdt, dNdt, dCldt, dCnldt = self.dxdt(self.time, upper) # get current rates of change
 
             for i in range(self.num_cells): # iterate through cells and update values
                 curr_cell = self.cells[i]
@@ -610,7 +598,6 @@ class NCell:
                 curr_cell.C_nl.append(curr_cell.C_nl[self.time] + dCnldt[i]*dt)
                 for j in range(curr_cell.num_sat_types):
                     curr_cell.satellites[j].S.append(curr_cell.satellites[j].S[self.time] + dSdt[i][j]*dt)
-                    curr_cell.satellites[j].S_d.append(curr_cell.satellites[j].S_d[self.time] + dS_ddt[i][j]*dt)
                     curr_cell.satellites[j].D.append(curr_cell.satellites[j].D[self.time] + dDdt[i][j]*dt)
                 for j in range(curr_cell.num_rb_types):
                     curr_cell.rockets[j].num.append(curr_cell.rockets[j].num[self.time] + dRdt[i][j]*dt)
@@ -642,11 +629,11 @@ class NCell:
         if self.time == 0 : self.run_sim_euler(dt_min, dt=dt_min, upper=upper)
         # get previous rate of change values
         self.update_lifetimes(self.t[self.time-1])
-        dSdt_n, dSddt_n, dDdt_n, dRdt_n, dNdt_n, dCldt_n, dCnldt_n = self.dxdt(self.time-1, upper=upper)
+        dSdt_n, dDdt_n, dRdt_n, dNdt_n, dCldt_n, dCnldt_n = self.dxdt(self.time-1, upper=upper)
         # get current rate of change values
         self.update_lifetimes(self.t[self.time])
         self.lupdate_time = self.time
-        dSdt_n1, dSddt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper=upper)
+        dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper=upper)
         dt_old = dt_min # set up old time step variable
         updated, redo = False, False
 
@@ -664,7 +651,6 @@ class NCell:
                 if len(curr_cell.N_bins) < self.time + 2: # check if we need to lengthen things
                     for j in range(curr_cell.num_sat_types):
                         curr_cell.satellites[j].S.append(0)
-                        curr_cell.satellites[j].S_d.append(0)
                         curr_cell.satellites[j].D.append(0)
                     for j in range(curr_cell.num_rb_types):
                         curr_cell.rockets[j].num.append(0)
@@ -674,7 +660,6 @@ class NCell:
 
                 for j in range(curr_cell.num_sat_types):
                     curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + 0.5*dt*((2+dt/dt_old)*dSdt_n1[i][j]-(dt/dt_old)*dSdt_n[i][j])
-                    curr_cell.satellites[j].S_d[self.time+1] = curr_cell.satellites[j].S_d[self.time] + 0.5*dt*((2+dt/dt_old)*dSddt_n1[i][j]-(dt/dt_old)*dSddt_n[i][j])
                     curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + 0.5*dt*((2+dt/dt_old)*dDdt_n1[i][j]-(dt/dt_old)*dDdt_n[i][j])
                 for j in range(curr_cell.num_rb_types):
                         curr_cell.rockets[j].num[self.time+1] = curr_cell.rockets[j].num[self.time] + 0.5*dt*((2+dt/dt_old)*dRdt_n1[i][j]-(dt/dt_old)*dRdt_n[i][j])
@@ -685,7 +670,7 @@ class NCell:
             if self.update_lifetime(self.t[self.time] + dt, self.t[self.lupdate_time]):
                     self.update_lifetimes(self.t[self.time] + dt)
                     updated = True
-            dSdt_n2, dSddt_n2, dDdt_n2, dRdt_n2, dNdt_n2, dCldt_n2, dCnldt_n2 = self.dxdt(self.time+1, upper=upper)
+            dSdt_n2, dDdt_n2, dRdt_n2, dNdt_n2, dCldt_n2, dCnldt_n2 = self.dxdt(self.time+1, upper=upper)
             # set up variable for step size checking
             epsilon = 0
             # re-do step using Trapezoid method
@@ -699,9 +684,6 @@ class NCell:
                     curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + 0.5*(dSdt_n2[i][j]+dSdt_n1[i][j])*dt
                     if curr_cell.satellites[j].S[self.time] != 0:
                         epsilon = max(np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.satellites[j].S[self.time+1]-old_S)), epsilon)
-                    curr_cell.satellites[j].S_d[self.time+1] = curr_cell.satellites[j].S_d[self.time] + 0.5*(dSddt_n2[i][j]+dSddt_n1[i][j])*dt
-                    if curr_cell.satellites[j].S_d[self.time] != 0:
-                        epsilon = max(np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.satellites[j].S_d[self.time+1]-old_Sd)), epsilon)
                     curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + 0.5*(dDdt_n2[i][j]+dDdt_n1[i][j])*dt
                     if curr_cell.satellites[j].D[self.time] != 0:
                         epsilon = max(np.abs((1/3)*(dt/(dt+dt_old))*(curr_cell.satellites[j].D[self.time+1]-old_D)), epsilon)
@@ -742,8 +724,8 @@ class NCell:
             # run events
             self.sim_events()
             # update which are the old and new rates of change
-            dSdt_n, dSddt_n, dDdt_n, dRdt_n, dNdt_n, dCldt_n, dCnldt_n = dSdt_n1, dSddt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1
-            dSdt_n1, dSddt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
+            dSdt_n, dDdt_n, dRdt_n, dNdt_n, dCldt_n, dCnldt_n = dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1
+            dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
 
 
     def sim_colls(self, dNdt, rate, m_1, m_2, index, typ):
