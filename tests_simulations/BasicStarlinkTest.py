@@ -18,7 +18,7 @@ def to_run(atmosphere, lamfac=None, alpha=None):
     name = str(lamfac) + "x" + str(alpha)
     T_loc = 1
     while T_loc <= T:
-        atmosphere.run_sim_precor(T_loc, mindtfactor=10000)
+        atmosphere.run_sim_precor(T_loc, mindtfactor=1000)
         print(name + " done to T = " + str(T_loc)) 
         atmosphere.save(directory, name, gap=0.01, force=True)
         T_loc += 1
@@ -38,20 +38,18 @@ if __name__ == '__main__':
     max_alt = 585 # maximum altitude the satellites appear at
     min_alt = 270 # minimum altitude the satellites appear at
     alt_edges = np.array([min_alt] + lower_alts + upper_alts + [max_alt])
-    target_alts = [550, 540, 550, 560, 570, 540, 550, 560, 570, 335.9,
-                340.8, 345.6, 540, 550, 560, 570, 0]
     S_i = []
     SD_i = []
     D_i = []
     R_i = []
     N_i = []
-    expl_rate_D = np.full(17, 1) # assume 1 explosion per year per 100 objects
+    expl_rate_D = np.full(4, 1) # assume 1 explosion per year per 100 objects
     expl_rate_R = np.array([1])
-    for i in range(len(alt_edges)-1): # initialize value lists (v0.9, 4 types each of v1.0, v1.5, 7 types of v2.0, 1 type for derelicts)
-        S_i.append(np.zeros(17))
-        SD_i.append(np.zeros(17))
-        D_i.append(np.zeros(17))
-        R_i.append(np.zeros(1))
+    for i in range(len(alt_edges)-1): # initialize value lists (v0.9, v1.0, v1.5, v2.0)
+        S_i.append(np.zeros(4))
+        SD_i.append(np.zeros(4))
+        D_i.append(np.zeros(4))
+        R_i.append(np.zeros(4))
         N_i.append(0)
     S_data = get_starlink(STARLINK_NAME, alt_edges)
     D_data = get_objects(SATELLITE_NAME, alt_edges)
@@ -60,32 +58,22 @@ if __name__ == '__main__':
     for i in range(len(alt_edges)-1): # go through and actually fill the values, right now there's no v2.0 launched
         S_loc = S_data[i]
         S_i[i][0] += S_loc['v0.9']
-        if alt_edges[i] < 540 :
-            S_i[i][1:5] += S_loc['v1.0']/4
-            S_i[i][5:9] += S_loc['v1.5']/4
-        elif alt_edges[i] < 550 :
-            S_i[i][2:5] += S_loc['v1.0']/3
-            S_i[i][6:9] += S_loc['v1.5']/3
-        elif alt_edges[i] < 560 :
-            S_i[i][3:5] += S_loc['v1.0']/2
-            S_i[i][7:9] += S_loc['v1.5']/2
-        else:
-            S_i[i][4] += S_loc['v1.0']
-            S_i[i][8] += S_loc['v1.5']
-        D_i[i][-1] += D_data[i]
+        S_i[i][1] += S_loc['v1.0']
+        S_i[i][2] += S_loc['v1.5']
+        D_i[i][0] += D_data[i]/3 # split the derelicts amoungst satellite types
+        D_i[i][1] += D_data[i]/3
+        D_i[i][2] += D_data[i]/3
         R_i[i][0] += R_data[i]
         N_i[i] += int(N_data[i])
     target_num = [2493, 2478, 2547, 0, 1584, 1584, 520, 720] # target number of starlink satellites in each orbit
-    lam_start = [0]*9 # none of the old versions of satellites are launched
-    lam_new = np.zeros(7) # launch rates of v2.0 for each target altitude
+    lam_new = [0]*(len(alt_edges)-1) # launch rates of v2.0 for each target altitude
     j = 0
     for i in range(len(lam_new)):
         if i < 3 : j = i+1
         else : j = i+2
         lam_new[i] = max((target_num[i] - np.sum(S_i[j]))/5.5, 0) # happens over 5.5 years (approximately)
 
-    m_s = [227, 260, 260, 260, 260, 295, 295, 295, 295, 
-        1250, 1250, 1250, 1250, 1250, 1250, 1250, 250]
+    m_s = [227, 260, 295, 1250]
 
     lam_factors = np.linspace(1, 2, 10) # range of launch rate factors to consider
     alphas = np.linspace(0.01, 0.2, 10) # range of alphas to consider
@@ -98,13 +86,15 @@ if __name__ == '__main__':
     with Pool(processes=20) as pool:
         print("Generating atmospheres")
         for i in range(len(lam_factors)):
-            lam = lam_start + (lam_new*lam_factors[i]).tolist() + [0]
+            lam = []
+            for k in range(len(alt_edges)-1):
+                lam.append([0,0,0,lam_new[k]*lam_factors[i])
             alpha_options = []
             for j in range(len(alphas)):
                 alpha = [0]*(len(alt_edges)-1)
                 for k in range(len(alpha)):
-                    alpha[k] = np.full(17, alphas[j])
-                alpha_options.append([deepcopy(S_i), deepcopy(SD_i), deepcopy(D_i), deepcopy(N_i), deepcopy(target_alts), deepcopy(alt_edges),
+                    alpha[k] = np.full(4, alphas[j])
+                alpha_options.append([deepcopy(S_i), deepcopy(SD_i), deepcopy(D_i), deepcopy(N_i), deepcopy(alt_edges),
                                       deepcopy(lam), drag_lifetime_loc, need_update, deepcopy(m_s), deepcopy(R_i), deepcopy(expl_rate_D),
                                       deepcopy(expl_rate_R), alpha])
 
