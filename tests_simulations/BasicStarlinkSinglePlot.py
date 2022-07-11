@@ -4,7 +4,7 @@ sys.path.append('./../')
 from NCell import NCell
 import numpy as np
 
-atmosphere = NCell.load('./BasicStarlinkSingleData/1x0.2/')
+atmosphere = NCell.load('./BasicStarlinkSingleFixedData/1x0.2/')
 t = atmosphere.get_t()
 T = t[-1]
 S = []
