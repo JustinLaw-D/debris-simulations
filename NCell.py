@@ -726,6 +726,79 @@ class NCell:
             dSdt_n, dDdt_n, dRdt_n, dNdt_n, dCldt_n, dCnldt_n = dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1
             dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
 
+    def run_sim_precor_fixed(self, T, dt=1, upper=True):
+        '''
+        simulates the evolution of the debris-satallite system for T years using predictor-corrector model
+        with fixed time step
+
+        Parameter(s):
+        T : length of the simulation (yr)
+
+        Keyword Parameter(s):
+        dt : timestep used by the simulation (yr, default 1 yr)
+        upper : whether or not to have debris come into the top shell (bool, default True)
+
+        Output(s): None
+
+        Note(s): AB(2) method is used as predictor, Trapezoid method as corrector
+        '''
+        # get additional initial value if needed
+        if self.time == 0 : self.run_sim_euler(dt, dt=dt, upper=upper)
+        # get previous rate of change values
+        self.update_lifetimes(self.t[self.time-1])
+        dSdt_n, dDdt_n, dRdt_n, dNdt_n, dCldt_n, dCnldt_n = self.dxdt(self.time-1, upper=upper)
+        # get current rate of change values
+        self.update_lifetimes(self.t[self.time])
+        self.lupdate_time = self.time
+        dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper=upper)
+
+        while self.t[self.time] < T:
+            # step forwards using AB(2) method
+            for i in range(self.num_cells): # iterate through cells and update values
+                curr_cell = self.cells[i]
+
+                if len(curr_cell.N_bins) < self.time + 2: # check if we need to lengthen things
+                    for j in range(curr_cell.num_sat_types):
+                        curr_cell.satellites[j].S.append(0)
+                        curr_cell.satellites[j].D.append(0)
+                    for j in range(curr_cell.num_rb_types):
+                        curr_cell.rockets[j].num.append(0)
+                    curr_cell.N_bins.append(0)
+                    curr_cell.C_l.append(0)
+                    curr_cell.C_nl.append(0)
+
+                for j in range(curr_cell.num_sat_types):
+                    curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + 0.5*dt*(3*dSdt_n1[i][j]-dSdt_n[i][j])
+                    curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + 0.5*dt*(3*dDdt_n1[i][j]-dDdt_n[i][j])
+                for j in range(curr_cell.num_rb_types):
+                        curr_cell.rockets[j].num[self.time+1] = curr_cell.rockets[j].num[self.time] + 0.5*dt*(3*dRdt_n1[i][j]-dRdt_n[i][j])
+                curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*dt*(3*dNdt_n1[i]-dNdt_n[i])
+                curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + 0.5*dt*(3*dCldt_n1[i]-dCldt_n[i])
+                curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + 0.5*dt*(3*dCnldt_n1[i]-dCnldt_n[i])
+            # get predicted rate of change from AB(2) method prediction
+            if self.update_lifetime(self.t[self.time] + dt, self.t[self.lupdate_time]):
+                    self.update_lifetimes(self.t[self.time] + dt)
+            dSdt_n2, dDdt_n2, dRdt_n2, dNdt_n2, dCldt_n2, dCnldt_n2 = self.dxdt(self.time+1, upper=upper)
+            # re-do step using Trapezoid method
+            for i in range(self.num_cells): # iterate through cells and update values
+                curr_cell = self.cells[i]
+                for j in range(curr_cell.num_sat_types):
+                    curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + 0.5*(dSdt_n2[i][j]+dSdt_n1[i][j])*dt
+                    curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + 0.5*(dDdt_n2[i][j]+dDdt_n1[i][j])*dt
+                for j in range(curr_cell.num_rb_types):
+                    curr_cell.rockets[j].num[self.time+1] = curr_cell.rockets[j].num[self.time] + 0.5*(dRdt_n2[i][j] + dRdt_n1[i][j])*dt
+                curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*(dNdt_n2[i]+dNdt_n1[i])*dt
+                curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + 0.5*(dCldt_n2[i]+dCldt_n1[i])*dt
+                curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + 0.5*(dCnldt_n2[i]+dCnldt_n1[i])*dt
+
+            # update time
+            self.t.append(self.t[self.time] + dt)
+            self.time += 1
+            # run events
+            self.sim_events()
+            # update which are the old and new rates of change
+            dSdt_n, dDdt_n, dRdt_n, dNdt_n, dCldt_n, dCnldt_n = dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1
+            dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
 
     def sim_colls(self, dNdt, rate, m_1, m_2, index, typ):
         '''
