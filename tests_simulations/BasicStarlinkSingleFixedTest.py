@@ -19,7 +19,7 @@ def to_run(atmosphere, lamfac=None, alpha=None):
     name = str(lamfac) + "x" + str(alpha)
     T_loc = 0.1
     while T_loc <= T:
-        atmosphere.run_sim_precor_fixed(T_loc, dt=0.001)
+        atmosphere.run_sim_RK4(T_loc, dt=0.0001)
         print(name + " done to T = " + str(T_loc) + " at " + str(time())) 
         atmosphere.save(directory, name, gap=0.01, force=True)
         print("Saved at " + str(time()))

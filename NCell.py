@@ -847,7 +847,7 @@ class NCell:
 
             # update decay lifetimes in needed, and update time
             if self.update_lifetime(self.t[self.time] + dt/2, self.t[self.lupdate_time]):
-                self.update_lifetimes()
+                self.update_lifetimes(self.t[self.time] + dt/2)
             self.t.append(self.t[self.time] + dt/2)
 
             # calculate k2 using these values
@@ -884,7 +884,7 @@ class NCell:
 
             # update decay lifetimes in needed, and update time
             if self.update_lifetime(self.t[self.time] + dt, self.t[self.lupdate_time]):
-                self.update_lifetimes()
+                self.update_lifetimes(self.t[self.time] + dt)
             self.t[self.time + 1] = self.t[self.time] + dt
 
             # use these to calculate k4
@@ -900,8 +900,8 @@ class NCell:
                 for j in range(curr_cell.num_rb_types):
                         curr_cell.rockets[j].num[self.time+1] = curr_cell.rockets[j].num[self.time] + (1/6)*dt*(dRdt_n1[i][j] + 2*dRdt_n2[i][j] + 2*dRdt_n3[i][j] + dRdt_n4[i][j])
                 curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + (1/6)*dt*(dNdt_n1[i] + 2*dNdt_n2[i] + 2*dNdt_n3[i] + dNdt_n4[i])
-                curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + (1/6)*dt*(dCldt_n1[i][j] + 2*dCldt_n2[i][j] + 2*dCldt_n3[i][j] + dCldt_n4[i][j])
-                curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + (1/6)*dt*(dCnldt_n1[i][j] + 2*dCnldt_n2[i][j] + 2*dCnldt_n3[i][j] + dCnldt_n4[i][j])
+                curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + (1/6)*dt*(dCldt_n1[i] + 2*dCldt_n2[i] + 2*dCldt_n3[i] + dCldt_n4[i])
+                curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + (1/6)*dt*(dCnldt_n1[i] + 2*dCnldt_n2[i] + 2*dCnldt_n3[i] + dCnldt_n4[i])
 
             # update time
             self.time += 1
