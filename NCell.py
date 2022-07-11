@@ -800,6 +800,114 @@ class NCell:
             dSdt_n, dDdt_n, dRdt_n, dNdt_n, dCldt_n, dCnldt_n = dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1
             dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper)
 
+    def run_sim_RK4(self, T, dt=1, upper=True):
+        '''
+        simulates the evolution of the debris-satallite system for T years using an RK4 method
+
+        Parameter(s):
+        T : length of the simulation (yr)
+
+        Keyword Parameter(s):
+        dt : timestep used by the simulation (yr, default 1 yr)
+        upper : whether or not to have debris come into the top shell (bool, default True)
+
+        Output(s): None
+        '''
+        # get atmospheric lifetime values
+        self.update_lifetimes(self.t[self.time])
+        self.lupdate_time = self.time
+        dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper=upper)
+
+        while self.t[self.time] < T:
+            # calculate k1
+            dSdt_n1, dDdt_n1, dRdt_n1, dNdt_n1, dCldt_n1, dCnldt_n1 = self.dxdt(self.time, upper=upper)
+
+            # take half-step forwards using k1
+            for i in range(self.num_cells): # iterate through cells and update values
+                curr_cell = self.cells[i]
+
+                if len(curr_cell.N_bins) < self.time + 2: # check if we need to lengthen things
+                    for j in range(curr_cell.num_sat_types):
+                        curr_cell.satellites[j].S.append(0)
+                        curr_cell.satellites[j].D.append(0)
+                    for j in range(curr_cell.num_rb_types):
+                        curr_cell.rockets[j].num.append(0)
+                    curr_cell.N_bins.append(0)
+                    curr_cell.C_l.append(0)
+                    curr_cell.C_nl.append(0)
+
+                for j in range(curr_cell.num_sat_types):
+                    curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + 0.5*dt*dSdt_n1[i][j]
+                    curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + 0.5*dt*dDdt_n1[i][j]
+                for j in range(curr_cell.num_rb_types):
+                        curr_cell.rockets[j].num[self.time+1] = curr_cell.rockets[j].num[self.time] + 0.5*dt*dRdt_n1[i][j]
+                curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*dt*dNdt_n1[i]
+                curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + 0.5*dt*dCldt_n1[i]
+                curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + 0.5*dt*dCnldt_n1[i]
+
+            # update decay lifetimes in needed, and update time
+            if self.update_lifetime(self.t[self.time] + dt/2, self.t[self.lupdate_time]):
+                self.update_lifetimes()
+            self.t.append(self.t[self.time] + dt/2)
+
+            # calculate k2 using these values
+            dSdt_n2, dDdt_n2, dRdt_n2, dNdt_n2, dCldt_n2, dCnldt_n2 = self.dxdt(self.time+1, upper=upper)
+
+            # redo half-step forwards using k2
+            for i in range(self.num_cells): # iterate through cells and update values
+                curr_cell = self.cells[i]
+
+                for j in range(curr_cell.num_sat_types):
+                    curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + 0.5*dt*dSdt_n2[i][j]
+                    curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + 0.5*dt*dDdt_n2[i][j]
+                for j in range(curr_cell.num_rb_types):
+                        curr_cell.rockets[j].num[self.time+1] = curr_cell.rockets[j].num[self.time] + 0.5*dt*dRdt_n2[i][j]
+                curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + 0.5*dt*dNdt_n2[i]
+                curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + 0.5*dt*dCldt_n2[i]
+                curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + 0.5*dt*dCnldt_n2[i]
+
+            # use these to calculate k3
+            dSdt_n3, dDdt_n3, dRdt_n3, dNdt_n3, dCldt_n3, dCnldt_n3 = self.dxdt(self.time+1, upper=upper)
+
+            # use these to take a full step forwards
+            for i in range(self.num_cells): # iterate through cells and update values
+                curr_cell = self.cells[i]
+
+                for j in range(curr_cell.num_sat_types):
+                    curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + dt*dSdt_n3[i][j]
+                    curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + dt*dDdt_n3[i][j]
+                for j in range(curr_cell.num_rb_types):
+                        curr_cell.rockets[j].num[self.time+1] = curr_cell.rockets[j].num[self.time] + dt*dRdt_n3[i][j]
+                curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + dt*dNdt_n3[i]
+                curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + dt*dCldt_n3[i]
+                curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + dt*dCnldt_n3[i]
+
+            # update decay lifetimes in needed, and update time
+            if self.update_lifetime(self.t[self.time] + dt, self.t[self.lupdate_time]):
+                self.update_lifetimes()
+            self.t[self.time + 1] = self.t[self.time] + dt
+
+            # use these to calculate k4
+            dSdt_n4, dDdt_n4, dRdt_n4, dNdt_n4, dCldt_n4, dCnldt_n4 = self.dxdt(self.time+1, upper=upper)
+
+            # use all k values to re-do full step forwards
+            for i in range(self.num_cells): # iterate through cells and update values
+                curr_cell = self.cells[i]
+
+                for j in range(curr_cell.num_sat_types):
+                    curr_cell.satellites[j].S[self.time+1] = curr_cell.satellites[j].S[self.time] + (1/6)*dt*(dSdt_n1[i][j] + 2*dSdt_n2[i][j] + 2*dSdt_n3[i][j] + dSdt_n4[i][j])
+                    curr_cell.satellites[j].D[self.time+1] = curr_cell.satellites[j].D[self.time] + (1/6)*dt*(dDdt_n1[i][j] + 2*dDdt_n2[i][j] + 2*dDdt_n3[i][j] + dDdt_n4[i][j])
+                for j in range(curr_cell.num_rb_types):
+                        curr_cell.rockets[j].num[self.time+1] = curr_cell.rockets[j].num[self.time] + (1/6)*dt*(dRdt_n1[i][j] + 2*dRdt_n2[i][j] + 2*dRdt_n3[i][j] + dRdt_n4[i][j])
+                curr_cell.N_bins[self.time+1] = curr_cell.N_bins[self.time] + (1/6)*dt*(dNdt_n1[i] + 2*dNdt_n2[i] + 2*dNdt_n3[i] + dNdt_n4[i])
+                curr_cell.C_l[self.time+1] = curr_cell.C_l[self.time] + (1/6)*dt*(dCldt_n1[i][j] + 2*dCldt_n2[i][j] + 2*dCldt_n3[i][j] + dCldt_n4[i][j])
+                curr_cell.C_nl[self.time+1] = curr_cell.C_nl[self.time] + (1/6)*dt*(dCnldt_n1[i][j] + 2*dCnldt_n2[i][j] + 2*dCnldt_n3[i][j] + dCnldt_n4[i][j])
+
+            # update time
+            self.time += 1
+            # run events
+            self.sim_events()
+
     def sim_colls(self, dNdt, rate, m_1, m_2, index, typ):
         '''
         updates dNdt by distributing a rate of collisions between two objects of mass m_1, m_2 in
