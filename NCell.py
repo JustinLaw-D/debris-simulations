@@ -20,7 +20,7 @@ class NCell:
                 lam_rb=None, del_t=None, expl_rate_L=None, expl_rate_D=None, C_sat=None, sigma_sat=None, 
                 expl_rate_R=None, C_rb=None, sigma_rb=None, v=None, delta=None, alphaS=None, alphaD=None, alphaN=None, 
                 alphaR=None, P=None, m_s=None, m_rb=None, AM_sat=None, AM_rb=None, L_min=1e-3, L_max=1, 
-                num_L=10, chi_min=-2, chi_max=1.5, num_chi=10, num_dir=100):
+                num_L=10, chi_min=-2, chi_max=1.5, num_chi=10, num_dir=100, min_lifetime=1/1000):
         '''
         Constructor for NCell class
     
@@ -70,6 +70,7 @@ class NCell:
         chi_max : maximum log10(A/M) to consider (log10(m^2/kg), default 3)
         num_chi : number of debris bins in log10(A/M) (default 10)
         num_dir : number of random directions to sample in creating probability tables (default 100)
+        min_lifetime : minimum decay lifetime permitted (yr, default 1/1000)
 
         Output(s):
         NCell instance
@@ -120,6 +121,7 @@ class NCell:
         # generate bins for log10(L), chi
         self.logL_edges = np.linspace(np.log10(L_min), np.log10(L_max), num=num_L+1)
         self.chi_edges = np.linspace(chi_min, chi_max, num=num_chi+1)
+        self.min_lifetime = min_lifetime
         self.sat_coll_probability_tables = list() # list of probability tables for satellite collisions in each bin
         self.rb_coll_probability_tables = list() # list of probability tables for rocket body collisions in each bin
         self.sat_expl_probability_tables = list() # list of probability tables for satellite explosions in each bin
@@ -196,7 +198,7 @@ class NCell:
                     AM_sat[j] = 1/(20*2.2)
 
                 # compute atmospheric drag lifetime for satallites in the shell
-                tau = drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, AM_sat[j], 0)
+                tau = max(min_lifetime, drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, AM_sat[j], 0))
                 sat = Satellite(S[i][j], D[i][j], m_s[j], sigma_sat[j], lam[i][j], del_t[i][j], (alphaS[i][j], 
                                 alphaD[i][j], alphaN[i][j], alphaR[i][j]), P[i][j], AM_sat[j], tau, C_sat[j], 
                                 expl_rate_L[j], expl_rate_D[j])
@@ -221,7 +223,7 @@ class NCell:
                     AM_rb[j] = 1/(20*2.2)
 
                 # compute atmospheric drag lifetime for rocket bodies in the shell
-                tau = drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, AM_rb[j], 0)
+                tau = max(min_lifetime, drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, AM_rb[j], 0))
                 rb = RocketBody(R_i[i][j], m_rb[j], sigma_rb[j], lam_rb[i][j], AM_rb[j], tau, C_rb[j], expl_rate_R[j])
                 rb_list.append(rb)
 
@@ -240,7 +242,7 @@ class NCell:
                 for k in range(num_chi):
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi + bin_top_chi)/2
-                    tau_N[j,k] = drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, 10**ave_chi, 0)
+                    tau_N[j,k] = max(min_lifetime, drag_lifetime(self.alts[i] + self.dh[i]/2, self.alts[i] - self.dh[i]/2, 10**ave_chi, 0))
 
             # figure out which events are in this cell
             events_loc = []
@@ -1109,14 +1111,14 @@ class NCell:
             dh = curr_cell.dh
             for j in range(curr_cell.num_sat_types): # handle satellites
                 AM = curr_cell.satellites[j].AM
-                curr_cell.satellites[j].tau = self.drag_lifetime(alt + dh/2, alt - dh/2, AM, t)
+                curr_cell.satellites[j].tau = max(self.min_lifetime, self.drag_lifetime(alt + dh/2, alt - dh/2, AM, t))
             for j in range(curr_cell.num_rb_types): # handle rockets
                 AM = curr_cell.rockets[j].AM
-                curr_cell.rockets[j].tau = self.drag_lifetime(alt + dh/2, alt - dh/2, AM, t)
+                curr_cell.rockets[j].tau = max(self.min_lifetime, self.drag_lifetime(alt + dh/2, alt - dh/2, AM, t))
             for j in range(self.num_chi): # handle debris
                 bin_bot_chi, bin_top_chi = self.chi_edges[j], self.chi_edges[j+1]
                 ave_chi = (bin_bot_chi + bin_top_chi)/2
-                curr_cell.tau_N[:,j] = self.drag_lifetime(alt + dh/2, alt - dh/2, 10**ave_chi, t)
+                curr_cell.tau_N[:,j] = max(self.min_lifetime, self.drag_lifetime(alt + dh/2, alt - dh/2, 10**ave_chi, t))
 
     def get_t(self):
         '''

@@ -19,7 +19,7 @@ def to_run(atmosphere, lamfac=None, alpha=None):
     name = str(lamfac) + "x" + str(alpha)
     T_loc = 0.1
     while T_loc <= T:
-        atmosphere.run_sim_RK4(T_loc, dt=0.0001)
+        atmosphere.run_sim_precor(T_loc, dt=1, mindtfactor=10000)
         print(name + " done to T = " + str(T_loc) + " at " + str(time())) 
         atmosphere.save(directory, name, gap=0.01, force=True)
         print("Saved at " + str(time()))
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     upper_alts = [535, 545, 555, 565, 575]
     max_alt = 585 # maximum altitude the satellites appear at
     min_alt = 270 # minimum altitude the satellites appear at
-    alt_edges = np.array([min_alt] + lower_alts + upper_alts + [max_alt])
+    alt_edges = np.array(upper_alts + [max_alt])
     S_i = []
     D_i = []
     R_i = []
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         D_i[i][2] += D_data[i]/3
         R_i[i][0] += R_data[i]
         N_i[i] += int(N_data[i])
-    target_num = [0, 2493, 2478, 2547, 0, 1584, 1584, 520, 720, 0] # target number of starlink satellites in each orbit
+    target_num = [1584, 1584, 520, 720, 0] # target number of starlink satellites in each orbit
     lam_new = np.zeros(len(alt_edges)-1) # launch rates of v2.0 for each altitude
     for i in range(len(lam_new)):
         lam_new[i] = max((target_num[i] - np.sum(S_i[i]))/5.5, 0) # happens over 5.5 years (approximately)
@@ -96,7 +96,7 @@ if __name__ == '__main__':
     print("Generation done at " + str(time()))
     print(atmosphere.get_N())
 
-    T = 0.1 # how long each simulation runs for
+    T = 100 # how long each simulation runs for
 
     # launch the simulations
     print("Starting Simulation at " + str(time()))
