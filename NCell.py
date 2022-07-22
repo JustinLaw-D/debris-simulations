@@ -73,7 +73,7 @@ class NCell:
         chi_min : minimum log10(A/M) to consider (log10(m^2/kg), default -3)
         chi_max : maximum log10(A/M) to consider (log10(m^2/kg), default 3)
         num_chi : number of debris bins in log10(A/M) (default 10)
-        num_dir : number of random directions to sample in creating probability tables (default 100)
+        num_dir : number of random directions to sample in creating probability tables (default 100, minimum 2)
 
         Output(s):
         NCell instance
@@ -310,10 +310,9 @@ class NCell:
         r = self.cells[cell_index].alt # in km
         L_min, L_max = 10**self.logL_edges[0], 10**self.logL_edges[-1]
         chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1]
-        #theta = np.random.uniform(low=0, high=np.pi, size=num_dir) # random directions
-        theta = [0]*num_dir
-        #phi = np.random.uniform(low=0, high=2*np.pi, size=num_dir)
-        phi = [0]*num_dir
+        theta_P = np.linspace(0, 1, num=num_dir) # random directions
+        phi = np.linspace(0, 2*np.pi, num=num_dir)
+        theta = np.arccos(1.0-2.0*theta_P)
         for i in range(self.num_cells): # iterate through cells
             curr_cell = self.cells[i]
             alt_min = curr_cell.alt - curr_cell.dh/2 # in km
