@@ -237,15 +237,17 @@ class NCell:
 
             # calculate decay paremeters for debris, initial debris values
             N_initial, tau_N = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi))
-            # generate initial distributions
-            lethal_L = np.log10(randL(N_l[i], 1e-1, L_max, 'expl')) # explosions are the main source https://www.esa.int/esapub/bulletin/bullet109/chapter16_bul109.pdf
-            nlethal_L = np.log10(randL(delta[i]*N_l[i], L_min, 1e-1, 'expl'))
             for j in range(num_L):
                 bin_L = 0
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
-                ave_L = 10**((bin_bot_L+bin_top_L)/2)
-                bin_L += len(lethal_L[(bin_bot_L < lethal_L) & (lethal_L < bin_top_L)])
-                bin_L += len(nlethal_L[(bin_bot_L < nlethal_L) & (nlethal_L < bin_top_L)])
+                if (10**bin_bot_L < -1) and (bin_top_L > -1):
+                    lam_factor = (-1-bin_bot_L)/(bin_top_L-bin_bot_L)
+                    bin_L += lam_factor*N_l[i]*delta[i]*(L_cdf(1e-1, L_min, 1e-1, 'expl') - L_cdf(10**bin_bot_L, L_min, 1e-1, 'expl'))
+                    bin_L += (1-lam_factor)*N_l[i]*(L_cdf(10**bin_top_L, 1e-1, L_max, 'expl') - L_cdf(10**bin_bot_L, 1e-1, L_max, 'expl'))
+                elif bin_bot_L >= -1:
+                    bin_L += N_l[i]*(L_cdf(10**bin_top_L, 1e-1, L_max, 'expl') - L_cdf(10**bin_bot_L, 1e-1, L_max, 'expl'))
+                else:
+                    bin_L += N_l[i]*delta[i]*(L_cdf(10**bin_top_L, L_min, 1e-1, 'expl') - L_cdf(10**bin_bot_L, L_min, 1e-1, 'expl'))
                 N_initial[j,0] = bin_L # put everything in the lowest A/M bin
                 for k in range(num_chi):
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
@@ -301,8 +303,9 @@ class NCell:
         r = self.cells[cell_index].alt # in km
         L_min, L_max = 10**self.logL_edges[0], 10**self.logL_edges[-1]
         chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1]
-        theta = np.random.uniform(low=0, high=np.pi, size=num_dir) # random directions
-        phi = np.random.uniform(low=0, high=2*np.pi, size=num_dir)
+        theta_P = np.linspace(0, 1, num=num_dir) # random directions
+        phi = np.linspace(0, 2*np.pi, num=num_dir)
+        theta = np.arccos(1.0-2.0*theta_P)
         for i in range(self.num_cells): # iterate through cells
             curr_cell = self.cells[i]
             alt_min = curr_cell.alt - curr_cell.dh/2 # in km
