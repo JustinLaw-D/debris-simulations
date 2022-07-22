@@ -242,16 +242,19 @@ class NCell:
                 rb_list.append(rb)
 
             # calculate decay paremeters for debris, initial debris values
-            N_initial, tau_N = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi))
+            N_initial, tau_N = np.zeros((num_L, num_chi)), np.zeros((num_L, num_chi), dtype=np.double)
             # generate initial distributions
-            lethal_L = np.log10(randL(N_l[i], 1e-1, L_max, 'expl')) # explosions are the main source https://www.esa.int/esapub/bulletin/bullet109/chapter16_bul109.pdf
-            nlethal_L = np.log10(randL(delta[i]*N_l[i], L_min, 1e-1, 'expl'))
             for j in range(num_L):
                 bin_L = 0
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
-                ave_L = 10**((bin_bot_L+bin_top_L)/2)
-                bin_L += len(lethal_L[(bin_bot_L < lethal_L) & (lethal_L < bin_top_L)])
-                bin_L += len(nlethal_L[(bin_bot_L < nlethal_L) & (nlethal_L < bin_top_L)])
+                if (10**bin_bot_L < -1) and (bin_top_L > -1):
+                    lam_factor = (-1-bin_bot_L)/(bin_top_L-bin_bot_L)
+                    bin_L += lam_factor*N_l[i]*delta[i]*(L_cdf(1e-1, L_min, 1e-1, 'expl') - L_cdf(10**bin_bot_L, L_min, 1e-1, 'expl'))
+                    bin_L += (1-lam_factor)*N_l[i]*(L_cdf(10**bin_top_L, 1e-1, L_max, 'expl') - L_cdf(10**bin_bot_L, 1e-1, L_max, 'expl'))
+                elif bin_bot_L >= -1:
+                    bin_L += N_l[i]*(L_cdf(10**bin_top_L, 1e-1, L_max, 'expl') - L_cdf(10**bin_bot_L, 1e-1, L_max, 'expl'))
+                else:
+                    bin_L += N_l[i]*delta[i]*(L_cdf(10**bin_top_L, L_min, 1e-1, 'expl') - L_cdf(10**bin_bot_L, L_min, 1e-1, 'expl'))
                 N_initial[j,0] = bin_L # put everything in the lowest A/M bin
                 for k in range(num_chi):
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
@@ -307,8 +310,10 @@ class NCell:
         r = self.cells[cell_index].alt # in km
         L_min, L_max = 10**self.logL_edges[0], 10**self.logL_edges[-1]
         chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1]
-        theta = np.random.uniform(low=0, high=np.pi, size=num_dir) # random directions
-        phi = np.random.uniform(low=0, high=2*np.pi, size=num_dir)
+        #theta = np.random.uniform(low=0, high=np.pi, size=num_dir) # random directions
+        theta = [0]*num_dir
+        #phi = np.random.uniform(low=0, high=2*np.pi, size=num_dir)
+        phi = [0]*num_dir
         for i in range(self.num_cells): # iterate through cells
             curr_cell = self.cells[i]
             alt_min = curr_cell.alt - curr_cell.dh/2 # in km
@@ -327,7 +332,7 @@ class NCell:
                     for l in range(num_dir): # sample random directions
                         if v_min2 < 0 and v_max2 < 0 : pass
                         elif v_min2 < 0 : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), v0, theta[l], phi[l], ave_chi, e_typ))
-                        else : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), theta[l], phi[l], v0, ave_chi, e_typ) - vprime_cdf(np.sqrt(v_min2), v0, theta[l], phi[l], ave_chi, e_typ))
+                        else : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), v0, theta[l], phi[l], ave_chi, e_typ) - vprime_cdf(np.sqrt(v_min2), v0, theta[l], phi[l], ave_chi, e_typ))
                     curr_prob[i,j,k] = sum/num_dir
 
     def save(self, filepath, name, compress=True, gap=0, force=False):
@@ -584,12 +589,12 @@ class NCell:
             dCldt[i] += np.sum(sat_coll[i,:,:]) + np.sum(RS_coll[i,:,:]) + np.sum(R_coll[i,:,:])
             for j in range(num_sat_types):
                 lethal_table = curr_cell.lethal_sat_N[j]
-                dCldt[i] += np.sum(sum(NS_coll[i])[lethal_table==True])
-                dCnldt[i] += np.sum(sum(NS_coll[i])[lethal_table==False])
+                dCldt[i] += np.sum(NS_coll[i,j,:,:][lethal_table==True])
+                dCnldt[i] += np.sum(NS_coll[i,j,:,:][lethal_table==False])
             for j in range(num_rb_types):
                 lethal_table = curr_cell.lethal_rb_N[j]
-                dCldt[i] += np.sum(sum(NR_coll[i])[lethal_table==True])
-                dCnldt[i] += np.sum(sum(NR_coll[i])[lethal_table==False])
+                dCldt[i] += np.sum(NR_coll[i,j,:,:][lethal_table==True])
+                dCnldt[i] += np.sum(NR_coll[i,j,:,:][lethal_table==False])
 
         return dSdt, dS_ddt, dDdt, dRdt, dNdt, dCldt, dCnldt
 

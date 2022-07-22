@@ -546,7 +546,6 @@ def vprime_cdf(V, v0, theta, phi, x, typ):
 
     Note(s): returns 0 on an invalid type
     '''
-    
     descriminate = (v0*np.sin(theta)*np.cos(phi))**2 - (v0**2-V**2)
     if descriminate < 0 : return 0 # cannot get a post-collision velocity this low
     del_v_max = -v0*np.sin(theta)*np.cos(phi) + np.sqrt(descriminate)

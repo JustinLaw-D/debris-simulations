@@ -307,7 +307,7 @@ class Cell:
                 D2 = self.satellites[j].D[time]
                 sigma2 = self.satellites[j].sigma
                 alphaS2 = self.satellites[j].alphaS
-                dSSdt[i,j], dSS_ddt[i,j], dS_ddS_ddt[i,j], dSDdt[i,j], dS_dDdt[i,j], dDDdt[i,j] = self.SColl_events(S, S_d, D, sigma, alphaS, alphaD, S2, S_d2, D2, sigma2, alphaS2)
+                dSSdt[i,j], dSS_ddt[i,j], dSDdt[i,j], dS_ddS_ddt[i,j], dS_dDdt[i,j], dDDdt[i,j] = self.SColl_events(S, S_d, D, sigma, alphaS, alphaD, S2, S_d2, D2, sigma2, alphaS2)
                 if i == j :
                     tot_S_sat_coll += 2*dSSdt[i,j] + dSS_ddt[i,j] + dSDdt[i,j]
                     tot_Sd_sat_coll += dSS_ddt[j,i] + 2*dS_ddS_ddt[i,j] + dS_dDdt[i,j]
