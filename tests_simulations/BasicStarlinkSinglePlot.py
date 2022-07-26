@@ -6,14 +6,12 @@ import numpy as np
 
 atmosphere = NCell.load('./BasicStarlinkSingleFixedData/1x0.2/')
 t = atmosphere.get_t()
-print(atmosphere.alts)
 T = t[-1]
 S = []
 D = []
 S_obj = atmosphere.get_S()
 D_obj = atmosphere.get_D()
 N = atmosphere.get_N()
-print(len(S_obj))
 for i in range(len(S_obj)):
     S_loc = []
     D_loc = []
@@ -29,7 +27,9 @@ for i in range(len(S_obj)):
     D.append(D_loc)
 
 import matplotlib.pyplot as plt
-print(len(S))
+
+for i in range(4):
+    print(S[i][-1])
 
 fig, ax1 = plt.subplots()
 ax1.set_xlabel('time (yr)')

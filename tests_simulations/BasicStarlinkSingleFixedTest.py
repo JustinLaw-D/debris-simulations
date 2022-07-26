@@ -17,13 +17,13 @@ from time import time
 def to_run(atmosphere, lamfac=None, alpha=None):
     directory = "BasicStarlinkSingleFixedData/"
     name = str(lamfac) + "x" + str(alpha)
-    T_loc = 0.1
+    T_loc = 1
     while T_loc <= T:
         atmosphere.run_sim_precor(T_loc, dt=1, mindtfactor=10000)
         print(name + " done to T = " + str(T_loc) + " at " + str(time())) 
         atmosphere.save(directory, name, gap=0.01, force=True)
         print("Saved at " + str(time()))
-        T_loc += 0.1
+        T_loc += 1
     return True
 
 def gen_atmosphere(args):
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     target_num = [1584, 1584, 520, 720, 0] # target number of starlink satellites in each orbit
     lam_new = np.zeros(len(alt_edges)-1) # launch rates of v2.0 for each altitude
     for i in range(len(lam_new)):
-        lam_new[i] = max((target_num[i] - np.sum(S_i[i]))/5.5, 0) # happens over 5.5 years (approximately)
+        lam_new[i] = target_num[i]/5.0 # happens over 5.5 years (approximately)
 
     m_s = [227, 260, 295, 1250]
 
