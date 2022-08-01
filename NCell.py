@@ -3,7 +3,7 @@
 from Cell import *
 from ObjectsEvents import *
 import numpy as np
-import matplotlib.pyplot as plt
+import random
 from BreakupModel import *
 from copy import deepcopy
 import os
@@ -20,7 +20,7 @@ class NCell:
                 lam_rb=None, up_time=None, del_t=None, expl_rate_L=None, expl_rate_D=None, C_sat=None, sigma_sat=None, 
                 expl_rate_R=None, C_rb=None, sigma_rb=None, v=None, delta=None, alphaS=None, alphaD=None, alphaN=None, 
                 alphaR=None, P=None, m_s=None, m_rb=None, AM_sat=None, AM_rb=None, tau_do=None, L_min=1e-3, L_max=1, 
-                num_L=10, chi_min=-2, chi_max=1.5, num_chi=10, num_dir=100):
+                num_L=10, chi_min=-2, chi_max=1.0, num_chi=10, num_dir=100, seed=None):
         '''
         Constructor for NCell class
     
@@ -74,6 +74,7 @@ class NCell:
         chi_max : maximum log10(A/M) to consider (log10(m^2/kg), default 3)
         num_chi : number of debris bins in log10(A/M) (default 10)
         num_dir : number of random directions to sample in creating probability tables (default 100, minimum 2)
+        seed : seed used by PRNG (default OS random)
 
         Output(s):
         NCell instance
@@ -111,6 +112,8 @@ class NCell:
             P = [None]*len(S)
         if tau_do is None:
             tau_do = [None]*len(S)
+        if seed is None:
+            seed = int.from_bytes(os.urandom(16), 'big') # generate random seed
 
         self.alts = np.zeros(len(alt_edges)-1)
         self.dh = np.zeros(self.alts.shape)
@@ -128,6 +131,7 @@ class NCell:
         # generate bins for log10(L), chi
         self.logL_edges = np.linspace(np.log10(L_min), np.log10(L_max), num=num_L+1)
         self.chi_edges = np.linspace(chi_min, chi_max, num=num_chi+1)
+        self.seed = seed
         self.sat_coll_probability_tables = list() # list of probability tables for satellite collisions in each bin
         self.rb_coll_probability_tables = list() # list of probability tables for rocket body collisions in each bin
         self.sat_expl_probability_tables = list() # list of probability tables for satellite explosions in each bin
@@ -278,26 +282,24 @@ class NCell:
             curr_rb_coll_prob = np.zeros((self.num_cells, self.num_L, self.num_chi))
             curr_sat_expl_prob = np.zeros((self.num_cells, self.num_L, self.num_chi))
             curr_rb_expl_prob = np.zeros((self.num_cells, self.num_L, self.num_chi))
-            self.fill_prob_table(curr_sat_coll_prob, i, num_dir, 'coll', 'sat')
-            self.fill_prob_table(curr_rb_coll_prob, i, num_dir, 'coll', 'rb')
-            self.fill_prob_table(curr_sat_expl_prob, i, num_dir, 'expl', 'sat')
-            self.fill_prob_table(curr_rb_expl_prob, i, num_dir, 'expl', 'rb')
+            self.fill_prob_table(curr_sat_coll_prob, curr_rb_coll_prob, i, num_dir, 'coll')
+            self.fill_prob_table(curr_sat_expl_prob, curr_rb_expl_prob, i, num_dir, 'expl')
             self.sat_coll_probability_tables.append(curr_sat_coll_prob)
             self.rb_coll_probability_tables.append(curr_rb_coll_prob)
             self.sat_expl_probability_tables.append(curr_sat_expl_prob)
             self.rb_expl_probability_tables.append(curr_rb_expl_prob)
 
-    def fill_prob_table(self, curr_prob, cell_index, num_dir, e_typ, s_typ):
+    def fill_prob_table(self, curr_prob_sat, curr_prob_rb, cell_index, num_dir, e_typ):
         '''
-        calculates probability table for collisions/explosions given the cell
+        calculates probability tables for collisions/explosions given the cell
         they occured in
 
         Input(s):
-        curr_prob : current probability table (3-d array)
+        curr_prob_sat : current probability table for satellites (3-d array)
+        curr_prob_rb : current probability table for rocket bodies (3-d array)
         cell_index : index of the current cell
         num_dir : number of random directions to sample in creating probability tables
         e_typ : type of event, either 'coll' (collision) or 'expl' (explosions)
-        s_typ : object involved in the event, either 'sat' (satellite) or 'rb' (rocket body)
 
         Keyword Input(s): None
 
@@ -310,29 +312,39 @@ class NCell:
         r = self.cells[cell_index].alt # in km
         L_min, L_max = 10**self.logL_edges[0], 10**self.logL_edges[-1]
         chi_min, chi_max = self.chi_edges[0], self.chi_edges[-1]
-        theta_P = np.linspace(0, 1, num=num_dir) # random directions
-        phi = np.linspace(0, 2*np.pi, num=num_dir)
-        theta = np.arccos(1.0-2.0*theta_P)
         for i in range(self.num_cells): # iterate through cells
             curr_cell = self.cells[i]
             alt_min = curr_cell.alt - curr_cell.dh/2 # in km
             alt_max = curr_cell.alt + curr_cell.dh/2
             v_min2 = G*Me*(2/((Re + r)*1000) - 1/((Re + alt_min)*1000)) # minimum velocity squared (m/s)
             v_max2 = G*Me*(2/((Re + r)*1000) - 1/((Re + alt_max)*1000)) # maximum velocity squared (m/s)
+            for j in range(self.num_chi): # handle vprime_cdf
+                ave_chi = (self.chi_edges[j]+self.chi_edges[j+1])/2
+                sum = 0 # perform monte carlo integration
+                if v_min2 < 0 and v_max2 < 0 : pass
+                elif v_min2 < 0:
+                    for k in range(num_dir):
+                        theta = random.random()*np.pi
+                        phi = random.random()*2*np.pi
+                        sum += vprime_cdf(np.sqrt(v_max2), v0, theta, phi, ave_chi, e_typ)
+                else:
+                    for k in range(num_dir):
+                        theta = random.random()*np.pi
+                        phi = random.random()*2*np.pi
+                        sum += vprime_cdf(np.sqrt(v_max2), v0, theta, phi, ave_chi, e_typ) - vprime_cdf(np.sqrt(v_min2), v0, theta, phi, ave_chi, e_typ)
+                curr_prob_sat[i,:,j] = sum/num_dir # save the result
+                curr_prob_rb[i,:,j] = sum/num_dir
+
             for j in range(self.num_L): # iterate through bins
                 bin_bot_L, bin_top_L = self.logL_edges[j], self.logL_edges[j+1]
                 ave_L = 10**((bin_bot_L+bin_top_L)/2)
-                curr_prob[i,j,:] = L_cdf(10**bin_top_L, L_min, L_max, e_typ) - L_cdf(10**bin_bot_L, L_min, L_max, e_typ) # probability of L being in this bin
+                curr_prob_sat[i,j,:] *= L_cdf(10**bin_top_L, L_min, L_max, e_typ) - L_cdf(10**bin_bot_L, L_min, L_max, e_typ) # probability of L being in this bin
+                curr_prob_rb[i,j,:] *= L_cdf(10**bin_top_L, L_min, L_max, e_typ) - L_cdf(10**bin_bot_L, L_min, L_max, e_typ)
                 for k in range(self.num_chi):
                     bin_bot_chi, bin_top_chi = self.chi_edges[k], self.chi_edges[k+1]
                     ave_chi = (bin_bot_chi+bin_top_chi)/2
-                    curr_prob[i,j,k] *= X_cdf(bin_top_chi, chi_min, chi_max, ave_L, s_typ) - X_cdf(bin_bot_chi, chi_min, chi_max, ave_L, s_typ)
-                    sum = 0
-                    for l in range(num_dir): # sample random directions
-                        if v_min2 < 0 and v_max2 < 0 : pass
-                        elif v_min2 < 0 : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), v0, theta[l], phi[l], ave_chi, e_typ))
-                        else : sum += curr_prob[i,j,k]*(vprime_cdf(np.sqrt(v_max2), v0, theta[l], phi[l], ave_chi, e_typ) - vprime_cdf(np.sqrt(v_min2), v0, theta[l], phi[l], ave_chi, e_typ))
-                    curr_prob[i,j,k] = sum/num_dir
+                    curr_prob_sat[i,j,k] *= X_cdf(bin_top_chi, chi_min, chi_max, ave_L, 'sat') - X_cdf(bin_bot_chi, chi_min, chi_max, ave_L, 'sat')
+                    curr_prob_rb[i,j,k] *= X_cdf(bin_top_chi, chi_min, chi_max, ave_L, 'rb') - X_cdf(bin_bot_chi, chi_min, chi_max, ave_L, 'rb')
 
     def save(self, filepath, name, compress=True, gap=0, force=False):
         '''
@@ -368,7 +380,7 @@ class NCell:
         # write parameters
         csv_file = open(true_path + 'params.csv', 'w', newline='')
         csv_writer = csv.writer(csv_file, dialect='unix')
-        csv_writer.writerow([self.num_L, self.num_chi, self.num_cells])
+        csv_writer.writerow([self.num_L, self.num_chi, self.num_cells, self.seed])
         csv_file.close()
 
         # write easy arrays
@@ -436,6 +448,7 @@ class NCell:
             atmos.num_L = int(row[0])
             atmos.num_chi = int(row[1])
             atmos.num_cells = int(row[2])
+            atmos.seed = int(row[3])
         csv_file.close()
 
         # load in simple numpy arrays
