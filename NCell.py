@@ -3,9 +3,9 @@
 from Cell import *
 from ObjectsEvents import *
 import numpy as np
-import random
 from BreakupModel import *
 from copy import deepcopy
+import time as timer
 import os
 import shutil
 import csv
@@ -538,6 +538,7 @@ class NCell:
         # iterate through cells, from top to bottom
         for i in range(self.num_cells):
             curr_cell = self.cells[i]
+            x = timer.time()
             dSdt[i,:], dS_ddt[i,:], dDdt[i,:], dRdt[i,:], S_in[i+1,:], S_din[i,:], D_in[i,:], R_in[i,:], N_in[i,:,:], sat_coll[i,:,:], RS_coll[i,:,:], R_coll[i,:,:], NS_coll[i,:,:,:], NR_coll[i,:,:,:], NS_expl[i,:], NR_expl[i,:] = curr_cell.dxdt_cell(time)
             # simulate collisions and explosions
             for j in range(num_sat_types): # iterate through satellite types
@@ -554,12 +555,17 @@ class NCell:
                     self.sim_colls_satrb(dNdt, RS_coll[i,j,k], m_s1, i, 'sat')
                     self.sim_colls_satrb(dNdt, RS_coll[i,j,k], m_rb2, i, 'rb')
 
+                ave_time = 0
                 for k in range(self.num_L): # satellite-debris collisions
                     ave_L = 10**((self.logL_edges[k] + self.logL_edges[k+1])/2)
                     for l in range(self.num_chi):
                         ave_AM = 10**((self.chi_edges[l] + self.chi_edges[l+1])/2)
                         m_d = find_A(ave_L)/ave_AM
+                        print(NS_coll[i,j,k,l])
+                        x = timer.time()
                         self.sim_colls(dNdt, NS_coll[i,j,k,l], m_s1, m_d, i, 'sat')
+                        ave_time += timer.time()-x
+                #print("{:e}".format(ave_time/(self.num_L*self.num_chi)))
 
                 self.sim_expl(dNdt, NS_expl[i,j], C, i, 'sat')
 
@@ -752,7 +758,7 @@ class NCell:
 
             # update step size, and check if calculation needs to be redone
             if epsilon > tolerance:
-                    redo = True
+                redo = True
             new_dt = min(np.abs(dt*(tolerance/epsilon)**(1/3)), maxdt)
             if redo:
                 if dt <= dt_min:
@@ -805,7 +811,7 @@ class NCell:
         elif typ == 'rb':
             prob_table = self.rb_coll_probability_tables[index]
         for i in range(self.num_cells): # iterate through cells to send debris to
-            dNdt[i,:,:] += N_debris*prob_table[i, :, :]
+            dNdt[i,:,:] += N_debris*prob_table[i,:,:]
 
     def sim_colls_satrb(self, dNdt, rate, m, index, typ):
         '''
@@ -832,7 +838,7 @@ class NCell:
         elif typ == 'rb':
             prob_table = self.rb_coll_probability_tables[index]
         for i in range(self.num_cells): # iterate through cells to send debris to
-            dNdt[i,:,:] += N_debris*prob_table[i, :, :]
+            dNdt[i,:,:] += N_debris*prob_table[i,:,:]
 
     def sim_expl(self, dNdt, rate, C, index, typ):
         '''
